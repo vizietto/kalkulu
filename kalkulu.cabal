@@ -3,7 +3,7 @@
 
 name:                kalkulu
 version:             0.1.0.0
--- synopsis:            
+synopsis:            interpreter of the Wolfram Language, written in literate Haskell
 -- description:         
 license:             GPL-3
 license-file:        LICENSE
