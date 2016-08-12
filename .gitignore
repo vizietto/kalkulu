@@ -178,3 +178,10 @@ TSWLatexianTemp*
 
 # KBibTeX
 *~[0-9]*
+
+# Haskell
+*~
+*.hi
+*.o
+cabal.sandbox.config
+.cabal-sandbox/
