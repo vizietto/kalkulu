@@ -509,10 +509,154 @@ simpleExpr = do
 \section{Operator precedence parser}
 \subsection{Algorithm}
 \label{parser:sub:algorithm}
+It is now possible to parse simple expressions. The strategy for
+parsing general expressions is to design a ``higher-order''
+combinator
+\begin{spec}
+makeParser :: (Bool -> Parser Expr) -> OperatorList -> (Bool -> Expr)
+\end{spec}
+which does the following:
+\begin{itemize}
+\item it takes a parser \inline{Bool -> Parser Expr} as an argument
+  (the argument of type \inline{Bool} inside the parser indicates
+  whether or not to ignore end of lines inside an expression),
+\item a list of operators \verb?listop? of the same precedence,
+\item it finally returns an improved parser, now able to parse
+  operators from the list \verb?listop?.
+\end{itemize}
+One remark: from now on, we will only work with lexemized parsers,
+\emph{i.e} parsers which consume trailing white space. Therefore, we
+need to replace \inline{parseSE} with
+\begin{spec}
+\ignoreEOL -> lexeme ignoreEOL $ simpleExpr
+\end{spec}
+The final parser is built by progressively enriching the simple
+expression parser with operators of decreasing precedence
+\begin{spec}
+expr :: Bool -> Parser Expr
+expr = foldl makeParser (\x -> lexeme x $ simpleExpr) opTable
+\end{spec}
+where \inline{opTable :: [OperatorList]} is table of all operators,
+documented in section~\ref{parser:sec:listops}.
+
+The following representation of operators with same precedence
+forbids us to mix different types of associativity.
+\begin{code}
+data OperatorList =
+    InfixL    [Parser B.BuiltinSymbol]
+  | InfixR    [Parser B.BuiltinSymbol]
+  | InfixF    [Parser B.BuiltinSymbol]
+  | InfixN    (Parser B.BuiltinSymbol)
+  | Prefix    [Parser B.BuiltinSymbol]
+  | Postfix   [Parser B.BuiltinSymbol]
+  | forall a. SpecialOp a => SpecialInfix [Parser a]
+  | CompoundExpression
+  | Derivative
+  | Multiplication
+  | Span
+
+class (Eq a) => SpecialOp a where
+  makeExpression :: Expr -> [(a, Expr)] -> Expr
+\end{code}
+To any well-behaved operator is associated a parser of type
+\inline{Parser B.BuiltinSymbol} (parsing the operator and returning
+it as a symbol). For example, the parser for \verb?'!'? is
+\begin{spec}
+  char '!' >> return B.Factorial
+\end{spec}
+The constructors \inline{InfixL}, \inline{InfixR} and \inline{InfixF}
+respectively accept lists of left, right and flat associative infix
+operators.  The constructor \inline{InfixN} takes a single non
+associative operator. All constructors from \inline{SpecialInfix} are
+there to deal with exceptions and will be explained in
+subsection~\ref{parser:subsec:special_cases}.
+
+\subsection{Infix operators}
+
+\subsection{Unary operators}
+
+\subsection{Special cases}
+\label{parser:subsec:special_cases}
+
+\subsubsection{CompoundExpression}
+
+\subsubsection{Derivative}
+
+\subsubsection{Multiplication}
+
+\subsubsection{Span}
+
+\subsubsection{Addition}
+
+\subsubsection{Inequalities}
+
+
 
 \begin{code}
--- temporary
+-- temporary, to remove
 expr :: Bool -> Parser Expr
 expr = const simpleExpr
+\end{code}
+\section{List of operators}
+\label{parser:sec:listops}
+\begin{code}
+opTable :: [OperatorList]
+opTable = [
+    Prefix       [string "<<"  >> return B.Get],
+    InfixN       (char   '?'   >> return B.PatternTest),
+    Derivative,
+    Postfix      [char   '='   >> (lexeme True $ char '.')
+                               >> return B.Unset],
+    Postfix      [string "++"  >> return B.Increment,
+                  string "--"  >> return B.Decrement],
+    Prefix       [string "++"  >> return B.PreIncrement,
+                  string "--"  >> return B.PreDecrement],
+    InfixF       [string "@*"  >> return B.Composition],
+    InfixR       [string "@@"  >> return B.Apply,
+                  string "/@"  >> return B.Map,
+                  string "//@" >> return B.MapAll],
+    Postfix      [string "!!"  >> return B.Factorial2,
+                  char   '!'   >> return B.Factorial],
+    InfixF       [string "<>"  >> return B.StringJoin],
+    InfixR       [char   '^'   >> return B.Power],
+    InfixF       [string "**"  >> return B.NonCommutativeMultiply],
+    InfixF       [char   '.'   >> notFollowedBy digit
+                               >> return B.Dot],
+--    Multiplication,
+    SpecialInfix [char   '+'   >> return Plus,
+                  char   '-'   >> return Minus],
+    Span,
+    InfixF       [string "===" >> return B.SameQ,
+                  string "=!=" >> return B.UnsameQ],
+    SpecialInfix [string "=="  >> return Equal,
+                  string "=!"  >> return Unequal,
+                  string ">="  >> return GreaterEqual,
+                  string "<="  >> return LessEqual,
+                  char   '>'   >> return Greater,
+                  char   '<'   >> return Less],
+    Prefix       [char   '!'   >> return B.Not],
+    InfixF       [string "&&"  >> return B.And],
+    InfixF       [string "||"  >> return B.Or],
+    Postfix      [string "..." >> return B.RepeatedNull,
+                  string ".."  >> return B.Repeated],
+    InfixF       [char '|'     >> return B.Alternative],
+    InfixF       [string "~~"  >> return B.StringExpression],
+    InfixL       [string "/;"  >> return B.Condition],
+    InfixR       [string "->"  >> return B.Rule,
+                  string ":>"  >> return B.RuleDelayed],
+    InfixL       [string "/."  >> return B.ReplaceAll,
+                  string "//." >> return B.ReplaceRepeated],
+    InfixR       [string "+="  >> return B.AddTo,
+                  string "-="  >> return B.SubtractFrom,
+                  string "*="  >> return B.TimesBy,
+                  string "/="  >> return B.DivideBy],
+    Postfix      [char   '&'   >> return B.Function],
+    InfixR       [string "^="  >> return B.UpSet,
+                  char   '='   >> return B.Set,
+                  string ":="  >> return B.SetDelayed,
+                  string "^:=" >> return B.UpSetDelayed],
+    InfixL       [string ">>>" >> return B.PutAppend,
+                  string ">>"  >> return B.Put],
+    CompoundExpression]    
 \end{code}
 \end{document}
