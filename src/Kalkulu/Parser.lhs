@@ -7,10 +7,11 @@ header is
 \begin{code}
 module Kalkulu.Parser where
 
-import Kalkulu.Builtin as B
-
+import Control.Monad
 import Data.Char (isSpace)
-import Text.ParserCombinators.Parser hiding (space)
+import Text.ParserCombinators.Parsec hiding (space)
+
+import Kalkulu.Builtin as B
 \end{code}
 
 \section{Overview of the grammar}
@@ -249,11 +250,14 @@ outcome of implicit multiplication). Also, unary operator \verb?'-'?
 
 \subsection{Strings}
 A \verb?String? is enclosed by quotes \verb?'\"'?. The escape
-characters \verb?'\n'?, \verb?'\t'?, \verb?'\\'? and \verb?'\"'? are allowed.
+characters \verb?'\n'?, \verb?'\t'?, \verb?'\\'? and \verb?'\"'? are
+allowed. As the combinator \inline{string} already exists in
+\verb?Parsec?, we call our own combinator \inline{string'}. It
+parses very simple expressions of type (VSE2).
 \begin{code}
-string :: Parser Expr
-string = liftM String $ between (char '"') (char '"')
-                                (many (noneOf "\"\\" <|> escapeChar))
+string' :: Parser Expr
+string' = liftM String $ between (char '"') (char '"')
+                                 (many (noneOf "\"\\" <|> escapeChar))
               
 escapeChar :: Parser Char
 escapeChar = do
@@ -263,14 +267,12 @@ escapeChar = do
                      't'  -> '\t'
                      _    -> e
 \end{code}
-The \inline{string} function parses a very simple expression of
-type (VSE2).
 
 \subsection{Symbols}
 A symbol begins with a letter, or the character \verb?'$'?, then it
 mays contain any alphanumeric character, or \verb?'$'?.
 Additionally, a symbol may contain the character \verb?'`'?
-(backquote) to separate its proper name from its context
+  (backquote) to separate its proper name from its context
 name(s). Contexts can be nested in one another. The full name of a
 symbol involves a sequence of context names
 \verb?context1`context2`...`name?. A symbol identifier can also begin
@@ -298,5 +300,219 @@ Finally, we can parse very simple expressions of type (VSE4a).
 \begin{code}
 symbol :: Parser Expr
 symbol = Symbol <$> identifier
+\end{code}
+
+\subsection{Blanks, Patterns and Messages}
+In this subsection, we first parse expressions of type (VSE3).
+Because of the similarity with the expressions (VSE4b) -- (VSE4h),
+this part will be used to parse patterns as well.  The first symbol
+(left of \verb?_? in (VSE4b) -- (VSE4h)) is called the \emph{pattern}
+symbol.
+
+We will define a function
+\begin{spec}
+blank :: Maybe Expr -> Parser Expr
+\end{spec}
+which takes as an argument a previously parsed pattern symbol, or
+nothing in case of an anonymous blank, and parses the whole
+expression.
+
+To parse an anonymous blank (VSE3), simply use
+\inline{blank Nothing}.
+\begin{code}
+blank :: Maybe Expr -> Parser Expr
+blank p = char '_' >> (
+  (try (string "__") >> (vse3g <|> vse3f))
+  <|> (char '_' >> (vse3e <|> vse3d))
+  <|> try vse3c <|> vse3b <|> vse3a)
+  where vse3a = makeBlank B.Blank
+        vse3b = makeBlank' B.Blank
+        vse3c = do void $ char '.'
+                   notFollowedBy (char '.')
+                   return $ Cmp (Builtin B.Optional)
+                                [makePattern $ Cmp (Builtin B.Blank) []]
+        vse3d = makeBlank  B.BlankSequence
+        vse3e = makeBlank' B.BlankSequence
+        vse3f = makeBlank  B.BlankNullSequence
+        vse3g = makeBlank' B.BlankNullSequence
+        makePattern arg = case p of
+          Nothing -> arg
+          Just x  -> Cmp (Builtin B.Pattern) [x, arg]
+        makeBlank b = return $ makePattern $ Cmp (Builtin b) []
+        makeBlank' b = do
+          s <- symbol
+          return $ makePattern $ Cmp (Builtin b) [s]
+\end{code}
+Note that in the case (VSE3c), the character \verb?'.'? cannot be
+followed by another dot, because the expression \verb?_..? is parsed
+as \verb?Repeated[Blank[]]? (here \verb?..? is as a postfix
+operator). In order to correctly parse this expression, we need to
+put a \inline{try} in front of this litigious case.
+
+It remains to parse expressions of type (VSE4i). The syntax
+\verb?s1::s2? is peculiar: \verb?s2? is parsed as a string, though
+it is not delimited by quotes. Moreover, \verb?s2? has the syntax
+of a symbol identifier, without backquotes. This holds also for
+expressions \verb?#abc? of type (VSE5c) (except that the identifier
+\verb?abc? can contain backquotes).
+
+The following function \inline{vse4i} parses from
+\verb?::s2(::s3)?, assuming that the symbol \verb?s1? has been
+previously parsed and passed as an argument.
+\begin{code}
+vse4ij :: Expr -> Parser Expr
+vse4ij s1 = do
+  void $ try $ string "::"
+  s2 <- identifier
+  (do void $ try $ string "::"                                       -- VSE4j
+      s3 <- identWithoutBackquote
+      return $ Cmp (Builtin B.MessageName) [s1, String s2, String s3])
+   <|> (return $ Cmp (Builtin B.MessageName) [s1, String s2])        -- VSE4i
+  where identWithoutBackquote = (:) <$> letter <*> many alphaNum
+\end{code}
+Note the \inline{try} combinator in front of every occurence of
+\verb?string "::"?. This is because \verb?::? should not be confused
+with the infix operator \verb?:?(representing \verb?Pattern?).  Now,
+we are equipped to parse simple expressions of type (VSE4a) -- (VSE4j).
+\begin{code}
+vse4 :: Parser Expr
+vse4 = symbol >>= \s ->
+  (notFollowedBy ((void $ char '_') <|> (void $ string "::")) >> return s)
+  <|> (blank $ Just s)
+  <|> vse4ij s
+\end{code}
+In \emph{Mathematica}, the syntax is slightly more permissive,
+expressions of type \verb?simpleExpr::s? are allowed.  This makes the
+definition of simple expressions left-recursive.  Moreover, this
+complication only enables to write only non sensical
+expressions. There is no restriction in \emph{Kalkulu} because those
+expressions can still be written in \verb?FullForm?.
+\subsection{Slots and Outs}
+The following parses expressions of type (VSE5) and (VSE6).
+\begin{code}
+slot :: Parser Expr
+slot = char '#' >> (
+  (do i <- natural
+      return $ Cmp (Builtin B.Slot) [i])                             -- VSE5b
+  <|> (do s <- identifier
+          return $ Cmp (Builtin B.Slot) [String s])                  -- VSE5c
+  <|> (char '#' >> ((do i <- natural                                 -- VSE5e
+                        return $ Cmp (Builtin B.SlotSequence) [i])
+                    <|> (return $ Cmp (Builtin B.SlotSequence) []))) -- VSE5d
+  <|> (return $ Cmp (Builtin B.Slot) []))                            -- VSE5a
+
+out :: Parser Expr
+out = char '%' >> (
+  (do i <- natural
+      return $ Cmp (Builtin B.Out) [i])                              -- VSE6c
+  <|> (do i <- toInteger <$> length <$> many (char '%')
+          return $ case i of
+             0 -> Cmp (Builtin B.Out) []                             -- VSE6a
+             _ -> Cmp (Builtin B.Out) [Number (-i-1)]))              -- VSE6b
+\end{code}
+\subsection{Bracketed expressions}
+The following parses parenthesized expressions (type (VSE7)). A
+general pattern is that when we deal with delimited expressions, the
+opening token (here \verb?'('?)  has to be lexemized. Spaces
+(including end of lines) are ignored \emph{before}, \emph{inside} and
+\emph{after} the parenthesized expression (\inline{expr True} is
+already lexemized, see subsection~\ref{parser:sub:algorithm}, it
+would be redundant to replace it with \inline{lexeme True $ expr
+  True}).
+\begin{code}
+parenthesizedExpr :: Parser Expr
+parenthesizedExpr = between (lexeme True $ char '(') (char ')') (expr True)
+\end{code}
+Among delimited expressions, expressions of type (VSE7) are
+exceptions because they can contain only one subexpression (\verb?()?
+and \verb?(e1, e2)? provoke a failure).
+
+Next, we write a general function to parse a succession of comma
+separated expressions.  We take care of implicit \verb?Null? symbols,
+which slightly obfuscates the code (we cannot use a simple
+\inline{sepBy} because we do not want an empty list \verb?{}? to be
+parsed as \verb?List[Null]?).
+\begin{code}
+bracketed :: Parser () -> Parser () -> Parser [Expr]
+bracketed opening closing = do
+  lexeme True $ opening
+  first <- firstArg
+  rest  <- many $ commaArg
+  closing
+  return $ case (first, rest) of
+    (Nothing, []) -> []
+    (Nothing, xs) -> (Builtin B.Null) : xs
+    (Just x , xs) -> x : xs
+  where firstArg = optionMaybe (lexeme True $ expr True)
+        arg = lexeme True (expr True <|> implicitNull)
+        commaArg = (lexeme True $ char ',') >> arg
+        implicitNull = return (Builtin B.Null)
+\end{code}
+We can now parse lists in form \verb?{...}?. In the future, we can
+use \inline{bracketed} to parse more bracketed expressions, like
+\verb?Association?s, etc.
+\begin{code}
+list :: Parser Expr
+list = listify <$> bracketed (void $ char '{') (void $ char '}')
+  where listify x = Cmp (Builtin B.List) x
+\end{code}
+\subsection{Conclusion}
+Thanks to the preceding subsections, we are able to create a parser
+of very simple expressions.
+\begin{code}
+vse :: Parser Expr
+vse = natural <|> string' <|> blank Nothing
+      <|> vse4 <|> slot <|> out
+      <|> parenthesizedExpr <|> list
+\end{code}
+No \inline{try} combinator is needed because each of the eight
+categories of very simple expressions has a proper beginning letter:
+\begin{itemize}
+\item numbers begin with \verb?'.'? or a digit,
+\item strings begin with \verb?'"'?,
+\item blanks begin with \verb?'_'?,
+\item expressions of type (VSE4) begin with \verb?'$'?, \verb?'`'? or
+  a letter,
+\item slots begin with \verb?'#'?,
+\item outs begin with \verb?'%'?,
+\item parenthesized expressions begin with \verb?'('?,
+\item lists begin with \verb?'{'?.
+\end{itemize}
+  
+The \inline{bracketed} parser will once again proves useful.
+To parse a composite expression \verb?h[args, ...]?, we start
+to parse at the opening square bracket (assuming the head was parsed
+before). We return the function mapping the head \verb?h? to the
+well formed composite expression. We use a similar technique for
+expressions of type (SE2).
+\begin{code}
+cmp :: Parser (Expr -> Expr)
+cmp = do
+  args <- bracketed (void $ char '[') (void $ char ']')
+  return (\h -> Cmp h args)
+
+part :: Parser (Expr -> Expr)
+part = do
+  args <- bracketed (try $ void $ string "[[") (void $ string "]]")
+  return $ \h -> Cmp (Builtin B.Part) (h:args)
+\end{code}
+Finally, the parser for simple expressions is based on the
+decomposition presented in Equation~\eqref{parser:eq:SE}.
+\begin{code}
+simpleExpr :: Parser Expr
+simpleExpr = do
+  h <- vse
+  t <- many (part <|> cmp)
+  return $ foldl (flip ($)) h t 
+\end{code}
+
+\section{Operator precedence parser}
+\subsection{Algorithm}
+\label{parser:sub:algorithm}
+
+\begin{code}
+-- temporary
+expr :: Bool -> Parser Expr
+expr = const simpleExpr
 \end{code}
 \end{document}
