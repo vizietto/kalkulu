@@ -1,6 +1,18 @@
 \documentclass[main.tex]{subfiles}
 
 \begin{document}
+\chapter{Parsing}
+The chapter describes the module \verb?Kalkulu.Parser?, whose
+header is
+\begin{code}
+module Kalkulu.Parser where
+
+import Kalkulu.Builtin as B
+
+import Data.Char (isSpace)
+import Text.ParserCombinators.Parser hiding (space)
+\end{code}
+
 \section{Overview of the grammar}
 \label{parser:sec:overview}
 
@@ -157,5 +169,64 @@ expression possibly followed by whitespace.
 \item The last condition is not necessary. It is not satisfied by
   compound expressions of type (VSE7), (VSE8), (SE1) and (SE2).
 \end{itemize}
+
+\section{Simple expression parser}
+Parsing in \emph{Kalkulu} is an impure process. For example, to
+parse a symbol \verb?symb?, one needs to know the current context,
+and this information is only available at run time. Even if knew it,
+it is also necessary to put new symbols in the symbol table.
+
+For the moment we neglect all side-effects and use the following
+type.
+\begin{code}
+type Name = String
+
+data Expr =
+    Number               Integer
+  | String               String
+  | Symbol               Name
+  | Builtin              B.BuiltinSymbol
+  | Cmp                  Expr [Expr]
+    deriving Show 
+\end{code}
+The \emph{name} field of a \inline{Symbol} contains its name,
+\emph{as it is read}, without further interpretation: it could be
+\verb?"a"?, \verb?"Global`a"? or even \verb?"`a"?. The constructor
+\inline{Cmp} is meant for composite expression, the first parameter
+is the head, and the second is the argument list. Also, for the
+moment, only integers are implemented in \emph{Kalkulu}.
+
+\subsection{White space}
+By \emph{white space}, we mean everything meaningless (included
+comments). An end of line character can be meaningful depending on
+the context. The argument of the following never failing parser
+indicates whether or not to ignore end of lines.
+\begin{code}
+whitespace :: Bool -> Parser ()
+whitespace ignoreEOL = skipMany $ (space <|> comment)
+  where space = void $ satisfy isSpace'
+        isSpace' c = isSpace c && (ignoreEOL || c /= '\n')
+\end{code}
+Comments are delimited by \verb?(*? and \verb?*)? and can be nested.
+\begin{code}
+comment :: Parser ()
+comment = do void $ try $ string "(*"
+             skipMany $ (void (noneOf "(*") <|> star <|> par <|> comment)
+             void $ string "*)"
+             where star = try $ void $ char '*' >> notFollowedBy (char ')')
+                   par  = try $ void $ char '(' >> notFollowedBy (char '*')
+\end{code}
+One should not use the \inline{whitespace} very often (mainly at the
+beginning of the main parser to skip any leading white space).
+Instead, the following function proves to be useful.
+\begin{code}
+lexeme :: Bool -> Parser a -> Parser a
+lexeme ignoreEOL p = do x <- p
+                        whitespace ignoreEOL
+                        return x
+\end{code}
+
+\subsection{Numbers}
+
 
 \end{document}
