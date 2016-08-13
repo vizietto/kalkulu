@@ -227,6 +227,24 @@ lexeme ignoreEOL p = do x <- p
 \end{code}
 
 \subsection{Numbers}
-
+For the moment, only integers are implemented in \emph{Kalkulu}.
+\textbf{TODO:} \verb?base^^digits?, floats, etc.
+\begin{code}
+natural :: Parser Expr
+natural = many1 digit >>= (return . Number . read)
+\end{code}
+Notice that a number begins with a digit or a dot \verb?'.'?, in
+particular it has no sign (\verb?'+'? or \verb?'-'?). Instead,
+\verb?'+'? and \verb?'-'? are unary operators, dealt in
+subsubsection~\textbf{TODO}. Thanks to that, a simple expression is
+(almost) totally distinguishable from an operator by looking at the
+first character\footnote{The only exception is \texttt{Dot}
+  (\texttt{'.'}). We settle this issue by asking the dot operator not
+  to be followed by a digit, see section~\textbf{TODO}.}. This
+property is important for fast parsing, because a simple expression
+can be followed by either a simple expression or an operator (an
+outcome of implicit multiplication). Also, unary operator \verb?'-'?
+  is smart enough to parse \verb?-2? as an atom rather than
+  \verb?Times[-1, 2]?.
 
 \end{document}
