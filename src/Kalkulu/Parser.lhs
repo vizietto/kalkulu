@@ -714,9 +714,10 @@ makeParser parser (InfixN op) ignoreEOL = do
       return $ Cmp (Builtin symbol) [x, y])
     <|> return x
 \end{code}
-We end this subsection with right associative infix operators.
-We will not use the decomposition~\eqref{parser:eq:infix_ops},
-instead we can write a recursive parser using
+We end this subsection with right associative infix operators.  We
+will not use the \inline{collect} function (base
+on~\eqref{parser:eq:infix_ops}), instead we can write a recursive
+parser using
 \begin{center}
 \texttt{<seqOfTerms> ::= <term> | <term> <op> <seqOfTerm>}
 \end{center}
@@ -729,6 +730,24 @@ makeParser parser oplist@(InfixR ops) ignoreEOL = do
     <|> return x
 \end{code}
 \subsection{Unary operators}
+We now continue our journey with prefix and postfix operators.
+\begin{code}
+makeParser parser (Postfix ops) ignoreEOL = do
+  x <- parser ignoreEOL
+  postfixOps <- many $ lexeme ignoreEOL $ processOps ops
+  return $ foldl (\e op -> Cmp (Builtin op) [e]) x postfixOps
+\end{code}
+The situation is a trifle more complicated for prefixed expressions
+\verb?op expr?, because \verb?expr? can begin with a prefix
+operator of precedence lower than \verb?op? (example: \verb?++!a?).
+In this case, we have to ``change'' the parser to read \verb?expr?.
+Again, we make use of \inline{prefixParser}.
+\begin{code}
+makeParser parser (Prefix ops) ignoreEOL = do
+  prefixOps <- many $ lexeme True $ processOps ops
+  x <- parser ignoreEOL <|> prefixParser ignoreEOL
+  return $ foldr (\op e -> Cmp (Builtin op) [e]) x prefixOps
+\end{code}
 
 \subsection{Special cases}
 \label{parser:subsec:special_cases}
