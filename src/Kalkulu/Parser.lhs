@@ -247,4 +247,23 @@ outcome of implicit multiplication). Also, unary operator \verb?'-'?
   is smart enough to parse \verb?-2? as an atom rather than
   \verb?Times[-1, 2]?.
 
+\subsection{Strings}
+A \verb?String? is enclosed by quotes \verb?'\"'?. The escape
+characters \verb?'\n'?, \verb?'\t'?, \verb?'\\'? and \verb?'\"'? are allowed.
+\begin{code}
+string :: Parser Expr
+string = liftM String $ between (char '"') (char '"')
+                                (many (noneOf "\"\\" <|> escapeChar))
+              
+escapeChar :: Parser Char
+escapeChar = do
+  _ <- char '\\'
+  e <- oneOf "nt\"\\" <?> "escape character"
+  return $ case e of 'n'  -> '\n'
+                     't'  -> '\t'
+                     _    -> e
+\end{code}
+The \inline{string} function parses a very simple expression of
+type (VSE2).
+  
 \end{document}
