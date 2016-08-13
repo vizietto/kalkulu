@@ -1,7 +1,16 @@
 module Kalkulu.Builtin where
 
 data BuiltinSymbol =
-    Plus
-  | Times
-  | Power
+    Blank
+  | BlankNullSequence
+  | BlankSequence
+  | List
+  | MessageName
+  | Null
+  | Optional
+  | Out
+  | Part
+  | Pattern
+  | Slot
+  | SlotSequence  
   deriving (Eq, Show)
