@@ -265,5 +265,38 @@ escapeChar = do
 \end{code}
 The \inline{string} function parses a very simple expression of
 type (VSE2).
-  
+
+\subsection{Symbols}
+A symbol begins with a letter, or the character \verb?'$'?, then it
+mays contain any alphanumeric character, or \verb?'$'?.
+Additionally, a symbol may contain the character \verb?'`'?
+(backquote) to separate its proper name from its context
+name(s). Contexts can be nested in one another. The full name of a
+symbol involves a sequence of context names
+\verb?context1`context2`...`name?. A symbol identifier can also begin
+with \verb?'`'?. In this case, it means that the symbol shoud be
+searched within the current context.
+
+In any case, an identifier cannot end with \verb?'`'?, and it cannot
+contain two consecutive backquotes. A backquote is necessarily
+followed by another name.
+\begin{code}
+backquote :: Parser Char
+backquote = char '`' >> (lookAhead letter <?> "non-empty context name")
+                     >> return '`'
+
+identFirst :: Parser Char
+identFirst = letter <|> backquote
+
+identLetter :: Parser Char
+identLetter = alphaNum <|> backquote
+
+identifier :: Parser String
+identifier = (:) <$> identFirst <*> many identLetter
+\end{code}
+Finally, we can parse very simple expressions of type (VSE4a).
+\begin{code}
+symbol :: Parser Expr
+symbol = Symbol <$> identifier
+\end{code}
 \end{document}
