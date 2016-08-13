@@ -1,7 +1,16 @@
 \documentclass[a4paper, 11pt]{report}
+%\usepackage[utf8]{inputenc}
+%\usepackage[T1]{fontenc}
 \usepackage{fullpage}
 \usepackage{multirow}
 \usepackage{subfiles}
+\usepackage[colorlinks=true, allcolors=blue]{hyperref}
+
+%%% Code
+\usepackage{minted}
+\newminted[code]{haskell}{}
+\newminted[spec]{haskell}{}
+\newcommand{\inline}[1]{\mintinline{haskell}{#1}} % inline code
 
 \begin{document}
 \title{Kalkulu}
