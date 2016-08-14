@@ -23,18 +23,18 @@ grammar. Complicated, rather than difficult, because it has a huge
 number of operators, many of which have special features. Here is a
 list of some subtleties:
 \begin{itemize}
-\item Parentheses are used to modify the order of the precedence
-  rules (\emph{e.g} the expression \verb?a*(b+c)? is parsed
-  \verb?Times[a, Plus[b, c]]}?. They are not used for function call.
-  Instead, we use square brackets\footnote{Strictly speaking, there
-    is no such a thing as ``function calls'' in \emph{Kalkulu},
+\item The purpose of parentheses is to modify the order of the
+  precedence rules (\emph{e.g} the expression \verb?a*(b+c)? is
+  parsed \verb?Times[a, Plus[b, c]]}?. They are not used for function
+  calls.  Instead, we use square brackets\footnote{Strictly speaking,
+    there is no such a thing as ``function calls'' in \emph{Kalkulu},
     though some expressions like \texttt{f[x]} look like function
     calls.}.
 \item The three main associativity types for infix operators are
   \emph{left} associativity, \emph{right} associativity and
   \emph{flat} associativity. The
   table~\ref{parser:tab:associativity_types} shows how a string
-  \verb?"a op b op c"? is parsed, for an operator \verb?op?.
+  \verb?"a op b op c"? is parsed, for a given operator \verb?op?.
   \begin{table}[!h]
     \centering
     \begin{tabular}{c|c}
@@ -47,20 +47,20 @@ list of some subtleties:
     \label{parser:tab:associativity_types}
   \end{table}
 \item Multiplication can be implicit (as in mathematics): the strings
-  \verb?"2a"? and \verb?"2 a"? are parsed as
-  \verb?Times[2, a]?. However, the absence of space between two
-  lexemes is not always considered as an implicit multiplication:
-  \verb?"a_"? and \verb?"a _"? are respectively parsed
-  \verb?Pattern[a, Blank[]]? and \verb?Times[a, Blank[]]?.
-\item In sequence of expressions (separated by commas), an implicit
+  \verb?"2a"? and \verb?"2 a"? are parsed into
+  \verb?Times[2, a]?. However, the absence of space is not always
+  considered as an implicit multiplication: \verb?"a_"? and
+  \verb?"a _"? are respectively parsed \verb?Pattern[a, Blank[]]? and
+  \verb?Times[a, Blank[]]?.
+\item In sequences of expressions (separated by commas), an implicit
   \verb?Null? symbol appears in places where no expression is given
   near a comma. The input \verb?{,}? is parsed as
   \verb?List[Null, Null]? (however \verb?{}? is the empty list
   \verb?List[]?).
 
-  Some infix operators may also enjoy this property, \emph{e.g} the
-  operator \verb?;? (associated to \verb?CompoundExpression?). The
-  input \verb?a;b;? is parsed as
+  Some infix operators may also enjoy a similar property, \emph{e.g}
+  the operator \verb?;? (associated to
+  \verb?CompoundExpression?). The input \verb?a;b;? is parsed as
   \verb?CompoundExpression[a, b, Null]?. (Note that the comma is not
   considered to be an operator).
 \item The end of line character indicates the end of an expression.
@@ -68,7 +68,7 @@ list of some subtleties:
   (\verb?2? and \verb?a?). However, this holds true if and only if
   the string before the end of line character is a well-formed
   expression. If not, \verb?'\n'? is treated as white space. For
-  example, \verb?"f[2\na]"? is parsed as a single expression
+  example, \verb?"f[2\na]"? is parsed as the single expression
   \verb?f[Times[2, a]]?. Actually, no backtracking is needed to
   determine the behaviour of \verb?'\n'? (here the white space was
   ignored because \verb?2\na? is a subexpression inside the composite
@@ -89,70 +89,58 @@ simple expressions.
     \hline
     & \textbf{Type} & \textbf{Example} & \textbf{Parsed expression}
     \\ \hline
-    (VSE1)  & Number   & \verb?123? & \verb?123? \\ \hline
-    (VSE2)  & String   & \verb?"abc"? & \verb?"abc"? \\ \hline
-    (VSE3a) &          & \verb?_?     & \verb?Blank[]? \\
-    (VSE3b) &          & \verb?_s? & \verb?Blank[s]? \\
-    (VSE3c) &          & \verb?_.?    & \verb?Optional[Blank[]]? \\
-    (VSE3d) & Blanks   & \verb?__?    & \verb?BlankSequence[]? \\
-    (VSE3e) &          & \verb?__s? & \verb?BlankSequence[s]? \\
-    (VSE3f) &          & \verb?___? & \verb?BlankNullSequence[]? \\
-    (VSE3g) &          & \verb?___s? & \verb?BlankNullSequence[s]? \\ \hline
-    (VSE4a) & Symbol   & \verb?s? & \verb?s? \\ \hline
-    (VSE4b) &          & \verb?s_? & \verb?Pattern[s, Blank[]]? \\
-    (VSE4c) &          & \verb?s1_s2? & \verb?Pattern[s1, Blank[s2]]? \\
-    (VSE4d) &          & \verb?s_.? & \verb?Optional[Pattern[s, Blank[]]]? \\
-    (VSE4e) & Patterns &  \verb?s__? & \verb?Pattern[s, BlankSequence[]]? \\
-    (VSE4f) & &\verb?s1__s2? & \verb?Pattern[s1, BlankSequence[s2]]? \\
-    (VSE4g) & &\verb?s___? & \verb?Pattern[s, BlankNullSequence[]]? \\
-    (VSE4h) & & \verb?s1___s2? & \verb?Pattern[s1, BlankNullSequence[s2]]? \\
+    (SE1)  & Number   & \verb?123? & \verb?123? \\ \hline
+    (SE2)  & String   & \verb?"abc"? & \verb?"abc"? \\ \hline
+    (SE3a) &          & \verb?_?     & \verb?Blank[]? \\
+    (SE3b) &          & \verb?_s? & \verb?Blank[s]? \\
+    (SE3c) &          & \verb?_.?    & \verb?Optional[Blank[]]? \\
+    (SE3d) & Blanks   & \verb?__?    & \verb?BlankSequence[]? \\
+    (SE3e) &          & \verb?__s? & \verb?BlankSequence[s]? \\
+    (SE3f) &          & \verb?___? & \verb?BlankNullSequence[]? \\
+    (SE3g) &          & \verb?___s? & \verb?BlankNullSequence[s]? \\ \hline
+    (SE4a) & Symbol   & \verb?s? & \verb?s? \\ \hline
+    (SE4b) &          & \verb?s_? & \verb?Pattern[s, Blank[]]? \\
+    (SE4c) &          & \verb?s1_s2? & \verb?Pattern[s1, Blank[s2]]? \\
+    (SE4d) &          & \verb?s_.? & \verb?Optional[Pattern[s, Blank[]]]? \\
+    (SE4e) & Patterns &  \verb?s__? & \verb?Pattern[s, BlankSequence[]]? \\
+    (SE4f) & &\verb?s1__s2? & \verb?Pattern[s1, BlankSequence[s2]]? \\
+    (SE4g) & &\verb?s___? & \verb?Pattern[s, BlankNullSequence[]]? \\
+    (SE4h) & & \verb?s1___s2? & \verb?Pattern[s1, BlankNullSequence[s2]]? \\
     \hline
-    (VSE4i) & \multirow{2}{*}{Message}
+    (SE4i) & \multirow{2}{*}{Message}
                       & \verb?s1::s2? & \verb?MessageName[s1, "s2"]? \\
-    (VSE4j) &         & \verb?s1::s2::s3?
+    (SE4j) &         & \verb?s1::s2::s3?
                       & \verb?MessageName[s1, "s2", "s3"]? \\ \hline
-    (VSE5a) &         & \verb?#? & \verb?Slot[1]? \\
-    (VSE5b) &         & \verb?#3? & \verb?Slot[3]? \\
-    (VSE5c) & Slots   & \verb?#abc? & \verb?Slot["abc"]? \\
-    (VSE5d) &         & \verb?##? & \verb?SlotSequence[1]? \\
-    (VSE5e) &         & \verb?##3? & \verb?SlotSequence[3]? \\ \hline
-    (VSE6a) &         & \verb?%? & \verb?Out[]? \\
-    (VSE6b) & Out     & \verb?%%%%? & \verb?Out[-4]? \\
-    (VSE6c) &         & \verb?%5? & \verb?Out[5]? \\ \hline
-    (VSE7) & Paren.   & \verb?(expr)? & \verb?expr? \\ \hline
-    (VSE8) & List     & \verb?{expr, ...}? & \verb?List[expr, ..]? \\ \hline
-    (SE1)  & Cmp      & \verb?simpleExpr[expr, ...]?
-                               & \verb?simpleExpr[expr, ...]? \\ \hline
-    (SE2) & Part      & \verb?simpleExpr[[expr, ...]]?
-                               & \verb?Part[simpleExpr, expr, ...]? \\ \hline
+    (SE5a) &         & \verb?#? & \verb?Slot[1]? \\
+    (SE5b) &         & \verb?#3? & \verb?Slot[3]? \\
+    (SE5c) & Slots   & \verb?#abc? & \verb?Slot["abc"]? \\
+    (SE5d) &         & \verb?##? & \verb?SlotSequence[1]? \\
+    (SE5e) &         & \verb?##3? & \verb?SlotSequence[3]? \\ \hline
+    (SE6a) &         & \verb?%? & \verb?Out[]? \\
+    (SE6b) & Out     & \verb?%%%%? & \verb?Out[-4]? \\
+    (SE6c) &         & \verb?%5? & \verb?Out[5]? \\ \hline
+    (SE7) & Paren.   & \verb?(expr)? & \verb?expr? \\ \hline
+    (SE8) & List     & \verb?{expr, ...}? & \verb?List[expr, ..]? \\ \hline
   \end{tabular}
   \caption{Simple expressions}
   \label{parser:tab:simple_expressions}
 \end{table}
-Unfortunately, the definition of a simple expression is
-left-recursive because of (SE1) and (SE2). We can circumvent the
-issue easily. Let us call a \emph{very simple expression} a simple
-expression of type (VSE1) to (VSE8). Then, any simple expression has
-the form
-\begin{equation}
-  \label{parser:eq:SE}
-  \verb?verySimpleExpr?\left(\left[\left(\verb?expr?(\verb?, expr?)^*
-  \right)^? \right] \mid \left[\left[\left(\verb?expr?(\verb?, expr?)^*
-  \right)^? \right]\right]  \right)^*
-\end{equation}
-Displaying (the inverse problem of parsing) requires also to know the
-precedences of operators. \emph{Mathematica} provides a function
-\verb?Precedence? for that. The boolean operators have the same
-precedence (equal to \verb?215.?), but this concerns only displaying.
-When we read \verb?a || b && c?, we perfectly know that \verb?And?
-  is computed before \verb?||?, because we are used to. Putting extra
-  parentheses around \verb?b && c? would be bothersome. The moral is
-  that we should not rely too much on \verb?Precedence? in this
-  chapter.
 
-Here are some motivations on how to discriminate between operators,
-simple expressions, etc. First, let us call \emph{lexeme} an
-expression possibly followed by whitespace.
+Displaying (the inverse problem of parsing) requires also to know the
+precedences of operators. However, the notions of precedence for
+displaying or parsing expressions may not
+coincide. \emph{Mathematica} provides a function
+\verb?Precedence?. Under this function, all boolean operators have
+the same precedence (equal to \verb?215.?). We can easily guess that
+this precedence regards displaying only. When we read
+\verb?a || b && c?, we perfectly know that \verb?&&? is computed
+before \verb?||?, because we are used to. Putting extra parentheses
+around \verb?b && c? would be unwieldy. The moral is that we should
+not rely too much on \verb?Precedence? in this chapter.
+
+Here are some motivations on how to decide what is an operator,
+a simple expression, etc. First, let us call \emph{lexeme} an
+expression (possibly) followed by trailing whitespace.
 \begin{itemize}
 \item An operator combines lexemes to form complex expressions,
   but is not itself an expression. On this basis,
@@ -168,14 +156,14 @@ expression possibly followed by whitespace.
   shows that \verb?::? must not be treated as an operator (recall
   that an operator acts on lexemes).
 \item The last condition is not necessary. It is not satisfied by
-  compound expressions of type (VSE7), (VSE8), (SE1) and (SE2).
+  compound expressions of type (SE7), (SE8).
 \end{itemize}
 
 \section{Simple expression parser}
-Parsing in \emph{Kalkulu} is an impure process. For example, to
-parse a symbol \verb?symb?, one needs to know the current context,
-and this information is only available at run time. Even if knew it,
-it is also necessary to put new symbols in the symbol table.
+Parsing in \emph{Kalkulu} is an impure process. To parse a symbol
+\verb?symb?, one needs to know the current context, and this
+information is only available at run time. Even if knew it, it is
+also necessary to put new symbols in the symbol table.
 
 For the moment we neglect all side-effects and use the following
 type.
@@ -200,15 +188,17 @@ moment, only integers are implemented in \emph{Kalkulu}.
 \subsection{White space}
 By \emph{white space}, we mean everything meaningless (included
 comments). An end of line character can be meaningful depending on
-the context. The argument of the following never failing parser
-indicates whether or not to ignore end of lines.
+the context (see discussion in section~\ref{parser:sec:overview}. The
+argument of the following never failing parser indicates whether or
+not to ignore end of lines.
 \begin{code}
 whitespace :: Bool -> Parser ()
 whitespace ignoreEOL = skipMany $ (space <|> comment)
   where space = void $ satisfy isSpace'
         isSpace' c = isSpace c && (ignoreEOL || c /= '\n')
 \end{code}
-Comments are delimited by \verb?(*? and \verb?*)? and can be nested.
+Comments are delimited by \verb?(*? and \verb?*)? and can be nested
+arbitrarily deep.
 \begin{code}
 comment :: Parser ()
 comment = do void $ try $ string "(*"
@@ -217,15 +207,28 @@ comment = do void $ try $ string "(*"
              where star = try $ void $ char '*' >> notFollowedBy (char ')')
                    par  = try $ void $ char '(' >> notFollowedBy (char '*')
 \end{code}
-One should not use the \inline{whitespace} very often (mainly at the
-beginning of the main parser to skip any leading white space).
-Instead, the following function proves to be useful.
+Except at the beginning of the main parser (to skip the leading white
+space), one should not use the \inline{whitespace} parser very
+often. Instead, the following function proves to be useful.
 \begin{code}
-lexeme :: Bool -> Parser a -> Parser a
-lexeme ignoreEOL p = do x <- p
+lexeme :: Parser a -> Bool -> Parser a
+lexeme p ignoreEOL = do x <- p
                         whitespace ignoreEOL
                         return x
 \end{code}
+It is to see \inline{lexeme} as a combinator which maps a parser
+to a \emph{lexemized} parser. In this order, we define an alias
+type
+\begin{code}
+type LexParser a = Bool -> Parser a
+\end{code}
+The \inline{lexeme} function has the type
+\begin{spec}
+lexeme :: Parser a -> LexParser a
+\end{spec}
+It is tempting to see \inline{lexeme} as a kind of \inline{return}
+function, embedding ordinary parsers in the class of lexemized
+parsers.
 
 \subsection{Numbers}
 For the moment, only integers are implemented in \emph{Kalkulu}.
@@ -241,19 +244,19 @@ subsubsection~\textbf{TODO}. Thanks to that, a simple expression is
 (almost) totally distinguishable from an operator by looking at the
 first character\footnote{The only exception is \texttt{Dot}
   (\texttt{'.'}). We settle this issue by asking the dot operator not
-  to be followed by a digit, see section~\textbf{TODO}.}. This
-property is important for fast parsing, because a simple expression
-can be followed by either a simple expression or an operator (an
-outcome of implicit multiplication). Also, unary operator \verb?'-'?
-  is smart enough to parse \verb?-2? as an atom rather than
-  \verb?Times[-1, 2]?.
+  to be followed by a digit, see
+  section~\ref{parser:sec:listops}.}. This property is important for
+fast parsing, because a simple expression can be followed by either a
+simple expression or an operator (an outcome of implicit
+multiplication). Also, unary operator \verb?'-'?  is smart enough to
+parse \verb?-2? as an atom rather than \verb?Times[-1, 2]?.
 
 \subsection{Strings}
 A \verb?String? is enclosed by quotes \verb?'\"'?. The escape
 characters \verb?'\n'?, \verb?'\t'?, \verb?'\\'? and \verb?'\"'? are
 allowed. As the combinator \inline{string} already exists in
 \verb?Parsec?, we call our own combinator \inline{string'}. It
-parses very simple expressions of type (VSE2).
+parses simple expressions of type (SE2).
 \begin{code}
 string' :: Parser Expr
 string' = liftM String $ between (char '"') (char '"')
@@ -270,18 +273,16 @@ escapeChar = do
 
 \subsection{Symbols}
 A symbol begins with a letter, or the character \verb?'$'?, then it
-mays contain any alphanumeric character, or \verb?'$'?.
-Additionally, a symbol may contain the character \verb?'`'?
-  (backquote) to separate its proper name from its context
-name(s). Contexts can be nested in one another. The full name of a
-symbol involves a sequence of context names
-\verb?context1`context2`...`name?. A symbol identifier can also begin
-with \verb?'`'?. In this case, it means that the symbol shoud be
-searched within the current context.
-
-In any case, an identifier cannot end with \verb?'`'?, and it cannot
-contain two consecutive backquotes. A backquote is necessarily
-followed by another name.
+may contain any alphanumeric character, or \verb?'$'?.  Additionally,
+a symbol may contain the character \verb?'`'?  (backquote) to
+separate its proper name from its context name(s). Contexts can be
+nested in one another. The full name of a symbol involves a sequence
+of context names \verb?context1`context2`...`name?. A symbol
+identifier can also begin with \verb?'`'?. In this case, it means
+that the symbol shoud be searched within the current context. Apart
+from this case, a context name must not be empty. This implies that
+cannot contain two consecutive backquotes, nor can it end with a
+\verb?'`'?.
 \begin{code}
 backquote :: Parser Char
 backquote = char '`' >> (lookAhead letter <?> "non-empty context name")
@@ -296,45 +297,42 @@ identLetter = alphaNum <|> backquote
 identifier :: Parser String
 identifier = (:) <$> identFirst <*> many identLetter
 \end{code}
-Finally, we can parse very simple expressions of type (VSE4a).
+Finally, we can parse simple expressions of type (SE4a).
 \begin{code}
 symbol :: Parser Expr
 symbol = Symbol <$> identifier
 \end{code}
 
 \subsection{Blanks, Patterns and Messages}
-In this subsection, we first parse expressions of type (VSE3).
-Because of the similarity with the expressions (VSE4b) -- (VSE4h),
-this part will be used to parse patterns as well.  The first symbol
-(left of \verb?_? in (VSE4b) -- (VSE4h)) is called the \emph{pattern}
-symbol.
+In this subsection, we first parse expressions of type (SE3).
+Because of the similarity with the expressions (SE4b) -- (SE4h), this
+part will be used to parse patterns as well.  The first symbol (left
+of \verb?_? in (SE4b) -- (SE4h)) is called the \emph{pattern} symbol.
 
 We will define a function
 \begin{spec}
 blank :: Maybe Expr -> Parser Expr
 \end{spec}
 which takes as an argument a previously parsed pattern symbol, or
-nothing in case of an anonymous blank, and parses the whole
-expression.
-
-To parse an anonymous blank (VSE3), simply use
+nothing in case of an anonymous blank (type (SE3)), and parses the
+whole expression. To parse an anonymous blank, simply use
 \inline{blank Nothing}.
 \begin{code}
 blank :: Maybe Expr -> Parser Expr
 blank p = char '_' >> (
-  (try (string "__") >> (vse3g <|> vse3f))
-  <|> (char '_' >> (vse3e <|> vse3d))
-  <|> try vse3c <|> vse3b <|> vse3a)
-  where vse3a = makeBlank B.Blank
-        vse3b = makeBlank' B.Blank
-        vse3c = do void $ char '.'
+  (try (string "__") >> (se3g <|> se3f))
+  <|> (char '_' >> (se3e <|> se3d))
+  <|> try se3c <|> se3b <|> se3a)
+  where se3a = makeBlank B.Blank
+        se3b = makeBlank' B.Blank
+        se3c = do void $ char '.'
                    notFollowedBy (char '.')
                    return $ Cmp (Builtin B.Optional)
                                 [makePattern $ Cmp (Builtin B.Blank) []]
-        vse3d = makeBlank  B.BlankSequence
-        vse3e = makeBlank' B.BlankSequence
-        vse3f = makeBlank  B.BlankNullSequence
-        vse3g = makeBlank' B.BlankNullSequence
+        se3d = makeBlank  B.BlankSequence
+        se3e = makeBlank' B.BlankSequence
+        se3f = makeBlank  B.BlankNullSequence
+        se3g = makeBlank' B.BlankNullSequence
         makePattern arg = case p of
           Nothing -> arg
           Just x  -> Cmp (Builtin B.Pattern) [x, arg]
@@ -343,89 +341,90 @@ blank p = char '_' >> (
           s <- symbol
           return $ makePattern $ Cmp (Builtin b) [s]
 \end{code}
-Note that in the case (VSE3c), the character \verb?'.'? cannot be
+Note that in the case (SE3c), the character \verb?'.'? cannot be
 followed by another dot, because the expression \verb?_..? is parsed
 as \verb?Repeated[Blank[]]? (here \verb?..? is as a postfix
 operator). In order to correctly parse this expression, we need to
 put a \inline{try} in front of this litigious case.
 
-It remains to parse expressions of type (VSE4i). The syntax
-\verb?s1::s2? is peculiar: \verb?s2? is parsed as a string, though
-it is not delimited by quotes. Moreover, \verb?s2? has the syntax
-of a symbol identifier, without backquotes. This holds also for
-expressions \verb?#abc? of type (VSE5c) (except that the identifier
+It remains to parse expressions of type (SE4i). The syntax
+\verb?s1::s2? is peculiar: \verb?s2? is parsed as a string, though it
+is not delimited by quotes. Moreover, \verb?s2? has the syntax of a
+symbol identifier, without backquotes. This holds also for
+expressions \verb?#abc? of type (SE5c) (except that the identifier
 \verb?abc? can contain backquotes).
 
 The following function \inline{vse4i} parses from
 \verb?::s2(::s3)?, assuming that the symbol \verb?s1? has been
 previously parsed and passed as an argument.
 \begin{code}
-vse4ij :: Expr -> Parser Expr
-vse4ij s1 = do
+se4ij :: Expr -> Parser Expr
+se4ij s1 = do
   void $ try $ string "::"
   s2 <- identifier
-  (do void $ try $ string "::"                                       -- VSE4j
+  (do void $ try $ string "::"                                       -- SE4j
       s3 <- identWithoutBackquote
       return $ Cmp (Builtin B.MessageName) [s1, String s2, String s3])
-   <|> (return $ Cmp (Builtin B.MessageName) [s1, String s2])        -- VSE4i
+   <|> (return $ Cmp (Builtin B.MessageName) [s1, String s2])        -- SE4i
   where identWithoutBackquote = (:) <$> letter <*> many alphaNum
 \end{code}
 Note the \inline{try} combinator in front of every occurence of
 \verb?string "::"?. This is because \verb?::? should not be confused
-with the infix operator \verb?:?(representing \verb?Pattern?).  Now,
-we are equipped to parse simple expressions of type (VSE4a) -- (VSE4j).
+with the infix operator \verb?':'? (representing \verb?Pattern?).
+Now, we are equipped to parse simple expressions of type (SE4a) --
+(SE4j).
 \begin{code}
-vse4 :: Parser Expr
-vse4 = symbol >>= \s ->
+se4 :: Parser Expr
+se4 = symbol >>= \s ->
   (notFollowedBy ((void $ char '_') <|> (void $ string "::")) >> return s)
   <|> (blank $ Just s)
-  <|> vse4ij s
+  <|> se4ij s
 \end{code}
 In \emph{Mathematica}, the syntax is slightly more permissive,
 expressions of type \verb?simpleExpr::s? are allowed.  This makes the
 definition of simple expressions left-recursive.  Moreover, this
-complication only enables to write only non sensical
-expressions. There is no restriction in \emph{Kalkulu} because those
-expressions can still be written in \verb?FullForm?.
+complication only enables to write non sensical expressions. There is
+no restriction in \emph{Kalkulu} because those expressions can still
+be written in \verb?FullForm?.
 \subsection{Slots and Outs}
-The following parses expressions of type (VSE5) and (VSE6).
+The following parses expressions of type (SE5) and (SE6).
 \begin{code}
 slot :: Parser Expr
 slot = char '#' >> (
   (do i <- natural
-      return $ Cmp (Builtin B.Slot) [i])                             -- VSE5b
+      return $ Cmp (Builtin B.Slot) [i])                             -- SE5b
   <|> (do s <- identifier
-          return $ Cmp (Builtin B.Slot) [String s])                  -- VSE5c
-  <|> (char '#' >> ((do i <- natural                                 -- VSE5e
+          return $ Cmp (Builtin B.Slot) [String s])                  -- SE5c
+  <|> (char '#' >> ((do i <- natural                                 -- SE5e
                         return $ Cmp (Builtin B.SlotSequence) [i])
-                    <|> (return $ Cmp (Builtin B.SlotSequence) []))) -- VSE5d
-  <|> (return $ Cmp (Builtin B.Slot) []))                            -- VSE5a
+                    <|> (return $ Cmp (Builtin B.SlotSequence) []))) -- SE5d
+  <|> (return $ Cmp (Builtin B.Slot) []))                            -- SE5a
 
 out :: Parser Expr
 out = char '%' >> (
   (do i <- natural
-      return $ Cmp (Builtin B.Out) [i])                              -- VSE6c
+      return $ Cmp (Builtin B.Out) [i])                              -- SE6c
   <|> (do i <- toInteger <$> length <$> many (char '%')
           return $ case i of
-             0 -> Cmp (Builtin B.Out) []                             -- VSE6a
-             _ -> Cmp (Builtin B.Out) [Number (-i-1)]))              -- VSE6b
+             0 -> Cmp (Builtin B.Out) []                             -- SE6a
+             _ -> Cmp (Builtin B.Out) [Number (-i-1)]))              -- SE6b
 \end{code}
 \subsection{Bracketed expressions}
-The following parses parenthesized expressions (type (VSE7)). A
+The following parses parenthesized expressions (type (SE7)). A
 general pattern is that when we deal with delimited expressions, the
 opening token (here \verb?'('?)  has to be lexemized. Spaces
 (including end of lines) are ignored \emph{before}, \emph{inside} and
 \emph{after} the parenthesized expression (\inline{expr True} is
 already lexemized, see subsection~\ref{parser:sub:algorithm}, it
-would be redundant to replace it with \inline{lexeme True $ expr
-  True}).
+would be redundant to replace it with \inline{lexeme (expr True)
+ True}).
 \begin{code}
 parenthesizedExpr :: Parser Expr
 parenthesizedExpr = between (lexeme True $ char '(') (char ')') (expr True)
 \end{code}
-Among delimited expressions, expressions of type (VSE7) are
-exceptions because they can contain only one subexpression (\verb?()?
-and \verb?(e1, e2)? provoke a failure).
+Among delimited expressions, expressions of type (SE7) are exceptions
+because they can contain only one subexpression (both \verb?()?  and
+\verb?(e1, e2)? provoke a failure).
 
 Next, we write a general function to parse a succession of comma
 separated expressions.  We take care of implicit \verb?Null? symbols,
@@ -435,7 +434,7 @@ parsed as \verb?List[Null]?).
 \begin{code}
 bracketed :: Parser () -> Parser () -> Parser [Expr]
 bracketed opening closing = do
-  lexeme True $ opening
+  lexeme opening True
   first <- firstArg
   rest  <- many $ commaArg
   closing
@@ -443,9 +442,9 @@ bracketed opening closing = do
     (Nothing, []) -> []
     (Nothing, xs) -> (Builtin B.Null) : xs
     (Just x , xs) -> x : xs
-  where firstArg = optionMaybe (lexeme True $ expr True)
+  where firstArg = optionMaybe (expr True)
         arg = lexeme True (expr True <|> implicitNull)
-        commaArg = (lexeme True $ char ',') >> arg
+        commaArg = (lexeme (char ',') True) >> arg
         implicitNull = return (Builtin B.Null)
 \end{code}
 We can now parse lists in form \verb?{...}?. In the future, we can
@@ -458,12 +457,12 @@ list = listify <$> bracketed (void $ char '{') (void $ char '}')
 \end{code}
 \subsection{Conclusion}
 Thanks to the preceding subsections, we are able to create a parser
-of very simple expressions.
+of simple expressions.
 \begin{code}
-vse :: Parser Expr
-vse = natural <|> string' <|> blank Nothing
-      <|> vse4 <|> slot <|> out
-      <|> parenthesizedExpr <|> list
+simpleExpr :: Parser Expr
+simpleExpr = natural <|> string' <|> blank Nothing
+             <|> se4 <|> slot <|> out
+             <|> parenthesizedExpr <|> list
 \end{code}
 No \inline{try} combinator is needed because each of the eight
 categories of very simple expressions has a proper beginning letter:
@@ -471,7 +470,7 @@ categories of very simple expressions has a proper beginning letter:
 \item numbers begin with \verb?'.'? or a digit,
 \item strings begin with \verb?'"'?,
 \item blanks begin with \verb?'_'?,
-\item expressions of type (VSE4) begin with \verb?'$'?, \verb?'`'? or
+\item expressions of type (SE4) begin with \verb?'$'?, \verb?'`'? or
   a letter,
 \item slots begin with \verb?'#'?,
 \item outs begin with \verb?'%'?,
@@ -479,7 +478,7 @@ categories of very simple expressions has a proper beginning letter:
 \item lists begin with \verb?'{'?.
 \end{itemize}
   
-The \inline{bracketed} parser will once again proves useful.
+The \inline{bracketed} combinator will once again proves useful.
 To parse a composite expression \verb?h[args, ...]?, we start
 to parse at the opening square bracket (assuming the head was parsed
 before). We return the function mapping the head \verb?h? to the
@@ -920,7 +919,7 @@ opTable = [
     Prefix       [string "<<"  >> return B.Get],
     InfixN       (char   '?'   >> return B.PatternTest),
     Derivative,
-    Postfix      [char   '='   >> (lexeme True $ char '.')
+    Postfix      [lexeme True (char '=') >> char '.'
                                >> return B.Unset],
     Postfix      [string "++"  >> return B.Increment,
                   string "--"  >> return B.Decrement],
@@ -939,8 +938,9 @@ opTable = [
                                >> return B.Dot],
 --    Multiplication,
     SpecialInfix [char   '+'   >> return Plus,
-                  char   '-'   >> return Minus],
-    Span,
+                  char   '-'   >> notFollowedBy (oneOf ">=")
+                               >> return Minus],
+--    Span,
     InfixF       [string "===" >> return B.SameQ,
                   string "=!=" >> return B.UnsameQ],
     SpecialInfix [string "=="  >> return Equal,
@@ -954,7 +954,7 @@ opTable = [
     InfixF       [string "||"  >> return B.Or],
     Postfix      [string "..." >> return B.RepeatedNull,
                   string ".."  >> return B.Repeated],
-    InfixF       [char '|'     >> return B.Alternative],
+    InfixF       [char   '|'   >> return B.Alternative],
     InfixF       [string "~~"  >> return B.StringExpression],
     InfixL       [string "/;"  >> return B.Condition],
     InfixR       [string "->"  >> return B.Rule,
