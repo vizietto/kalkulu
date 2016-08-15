@@ -188,9 +188,9 @@ moment, only integers are implemented in \emph{Kalkulu}.
 \subsection{White space}
 By \emph{white space}, we mean everything meaningless (included
 comments). An end of line character can be meaningful depending on
-the context (see discussion in section~\ref{parser:sec:overview}. The
-argument of the following never failing parser indicates whether or
-not to ignore end of lines.
+the context (see discussion in
+section~\ref{parser:sec:overview}). The argument of the following
+never failing parser indicates whether or not to ignore end of lines.
 \begin{code}
 whitespace :: Bool -> Parser ()
 whitespace ignoreEOL = skipMany $ (space <|> comment)
@@ -216,9 +216,9 @@ lexeme p ignoreEOL = do x <- p
                         whitespace ignoreEOL
                         return x
 \end{code}
-It is to see \inline{lexeme} as a combinator which maps a parser
-to a \emph{lexemized} parser. In this order, we define an alias
-type
+It is insightful to see \inline{lexeme} as a combinator which maps a
+parser to a \emph{lexemized} parser. In this order, we define an
+alias type
 \begin{code}
 type LexParser a = Bool -> Parser a
 \end{code}
@@ -326,9 +326,9 @@ blank p = char '_' >> (
   where se3a = makeBlank B.Blank
         se3b = makeBlank' B.Blank
         se3c = do void $ char '.'
-                   notFollowedBy (char '.')
-                   return $ Cmp (Builtin B.Optional)
-                                [makePattern $ Cmp (Builtin B.Blank) []]
+                  notFollowedBy (char '.')
+                  return $ Cmp (Builtin B.Optional)
+                               [makePattern $ Cmp (Builtin B.Blank) []]
         se3d = makeBlank  B.BlankSequence
         se3e = makeBlank' B.BlankSequence
         se3f = makeBlank  B.BlankNullSequence
@@ -420,7 +420,7 @@ would be redundant to replace it with \inline{lexeme (expr True)
  True}).
 \begin{code}
 parenthesizedExpr :: Parser Expr
-parenthesizedExpr = between (lexeme True $ char '(') (char ')') (expr True)
+parenthesizedExpr = between (lexeme (char '(') True) (char ')') (expr True)
 \end{code}
 Among delimited expressions, expressions of type (SE7) are exceptions
 because they can contain only one subexpression (both \verb?()?  and
@@ -443,7 +443,7 @@ bracketed opening closing = do
     (Nothing, xs) -> (Builtin B.Null) : xs
     (Just x , xs) -> x : xs
   where firstArg = optionMaybe (expr True)
-        arg = lexeme True (expr True <|> implicitNull)
+        arg = lexeme (expr True <|> implicitNull) True
         commaArg = (lexeme (char ',') True) >> arg
         implicitNull = return (Builtin B.Null)
 \end{code}
@@ -465,7 +465,7 @@ simpleExpr = natural <|> string' <|> blank Nothing
              <|> parenthesizedExpr <|> list
 \end{code}
 No \inline{try} combinator is needed because each of the eight
-categories of very simple expressions has a proper beginning letter:
+categories of simple expressions begins with a distinctive letter:
 \begin{itemize}
 \item numbers begin with \verb?'.'? or a digit,
 \item strings begin with \verb?'"'?,
@@ -477,501 +477,250 @@ categories of very simple expressions has a proper beginning letter:
 \item parenthesized expressions begin with \verb?'('?,
 \item lists begin with \verb?'{'?.
 \end{itemize}
-  
-The \inline{bracketed} combinator will once again proves useful.
-To parse a composite expression \verb?h[args, ...]?, we start
-to parse at the opening square bracket (assuming the head was parsed
-before). We return the function mapping the head \verb?h? to the
-well formed composite expression. We use a similar technique for
-expressions of type (SE2).
-\begin{code}
-cmp :: Parser (Expr -> Expr)
-cmp = do
-  args <- bracketed (void $ char '[') (void $ char ']')
-  return (\h -> Cmp h args)
-
-part :: Parser (Expr -> Expr)
-part = do
-  args <- bracketed (try $ void $ string "[[") (void $ string "]]")
-  return $ \h -> Cmp (Builtin B.Part) (h:args)
-\end{code}
-Finally, the parser for simple expressions is based on the
-decomposition presented in Equation~\eqref{parser:eq:SE}.  From now
-on, we will work only with lexemized parsers, \emph{i.e} parsers
-which consume trailing space. Remember that an end of line character
-can be considered as white space, depending on the context.  All
-lexemized parsers have consequently one boolean argument indicating
-whether or not to ignore end of lines.
-\begin{code}
-simpleExpr :: Bool -> Parser Expr
-simpleExpr ignoreEOL = do
-  h <- lexeme ignoreEOL $ vse
-  t <- many $ lexeme ignoreEOL $ (part <|> cmp)
-  return $ foldl (flip ($)) h t 
-\end{code}
 
 \section{Operator precedence parser}
+\subsection{Vocabulary}
+\label{parser:subsec:vocabulary}
+First, let us introduce some vocabulary. We call a \emph{precedence
+  level} a collection of operators of equal precedence (an equivalence
+class under the relation ``having the same precedence as''). Common
+examples are $\{\verb?+?, \verb?-?\}$ or $\{\verb?===?, \verb?=!=?\}$
+(many of those classes are singletons, like $\{\verb?&&?\}$, etc.)
+The \emph{principal precedence level} in an expression is the ``last
+executed'' class of operators. For example, in \verb?a+b*c-d?, the
+principal precedence level is $\{\verb?+?, \verb?-?\}$ (addition and
+subtraction have lower precedence than multiplication). Precedence
+levels are totally ordered, of course by precedence... The precedence
+level $\{\verb?+?, \verb?-?\}$ (addition and subtraction) is for
+example lower than $\{\verb?^?\}$ (exponentiation). If $e$ is a
+precedence level, we call $e^+$ its successor
+\[
+e^+ := \min \{e' \mid e' > e\}.
+\]
+Often, only one operator in a principal level
+appears, in this case, we call it the \emph{principal operator}.  In
+order to avoid cumbersome notations, we shall avoid the notion of
+principal precedence level, and present only examples with a
+principal operator.
+
+The principal operator divide the whole expression into
+subexpressions. We call \emph{expression tail} what is found right of
+the first subexpression, see Table~\ref{parser:tab:principal_op} for
+some examples.
+
+\begin{table}[!h]
+  \centering
+  \begin{tabular}{c|c|c|c|c}
+    \textbf{Case} & \textbf{Expression} & \textbf{Prin. op.} &
+    \textbf{Subexpressions} & \textbf{Expression tail} \\ \hline
+    1 & \verb?a+b*c+d? & \verb?+? & \verb?a, b*c, d? & \verb?+b*c+d? \\
+    2 & \verb?a[b,c]? & \verb?[b,c]? & \verb?a? & \verb?[b,c]? \\
+    3 & \verb?!a? & \verb?!? & \verb?a? & $\emptyset$ \\
+    4 & \verb?a+!b? & \verb?+? & \verb?a, !b? & \verb?+!b? \\
+    5 & \verb?a&*b + c? & \verb?+? & \verb?a&*b, c? & \verb?+c? \\
+    6 & \verb?a&++? & \verb?++? & \verb?a&? & \verb?++? \\
+    7 & \verb?++!a? & \verb?++? & \verb?!a? & $\emptyset$
+  \end{tabular}
+  \caption{Principal operators and expression tails}
+  \label{parser:tab:principal_op}
+\end{table}
+
+Note that (case 2 of Table~\ref{parser:tab:principal_op}) we consider
+the argument list in a composite expression as a postfix operator.
+When the principal operator is a prefix operator (cases 3 and 7),
+the expression has no tail. One important remark is that the
+principal operator is not necessarily the one of least precedence.
+Four situations can show up where this holds wrong:
+\begin{itemize}
+\item the principal operator \verb?op? is infix and the first
+  subexpression contains a postfix operator of precedence lower than
+  \verb?op? (case 5),
+\item the principal operator \verb?op? is infix and the last
+  subexpression contains a prefix operator of lower precedence than
+  \verb?op? (case 4),
+\item a postfix operator \verb?op? is applied to a subexpression
+  whose principal operator is a postfix operator of precedence lower
+  than \verb?op? (case 6),
+\item a prefix operator \verb?op? is applied to a subexpression whose
+  principal operator is a prefix operator of precedence lower than
+  \verb?op? (case 7).
+\end{itemize}
+Last, one should see the expression tail as a function, which maps
+a missing first subexpression to the whole expression, for example
+in case 1:
+\[
+\verb?a? \mapsto \verb?Plus[a, Times[b, c], d]?.
+\]
 \subsection{Algorithm}
 \label{parser:sub:algorithm}
-It is now possible to parse simple expressions. The strategy for
-parsing general expressions is to design a ``higher-order''
-combinator
-\begin{spec}
-makeParser :: (Bool -> Parser Expr) -> OperatorList -> (Bool -> Expr)
-\end{spec}
-which does the following:
-\begin{itemize}
-\item it takes a lexemized parser \inline{Bool -> Parser Expr} as an
-  argument (the argument of type \inline{Bool} inside the parser
-  indicates whether or not to ignore end of lines inside and after an
-  expression),
-\item a list of operators \verb?listop? of the same precedence,
-\item it finally returns an improved parser, now able to parse
-  operators from the list \verb?listop?.
-\end{itemize}
-The final parser is built by progressively enriching the simple
-expression parser with operators of decreasing precedence
+
+The strategy for parsing expressions is to make full use of parser
+combinators. We start from \inline{simpleExpr} (the parser for simple
+expressions) and generate new parsers which can recognize more and
+more operators. This is not a straightforward task. Cases 4, 5 of
+Table~\ref{parser:tab:principal_op} show that, to parse an addition,
+one needs to already ``know'' the unary operators of lower
+precedence...
+
+Let $e$ be a precedence level. We call $\mathcal{L}_e$ the language
+consisting of simple expressions, and expressions with principal
+precedence level $\geq e$ such that no postfix operator of precedence
+strictly lower than $e$ appears.
+
+When $e = \{\verb?+?, \verb?-?\}$, then cases 1, 2, 4 and 7 of
+Table~\ref{parser:tab:principal_op} belong to $\mathcal{L}_e$. Case 3
+fails because the principal operator \verb?'!'? (\verb?Not?) has
+precedence lower than $e$. Case 5 fails because the postfix operator
+\verb?'&'? is involved, so does case 6. However, \verb?(a&)+b?
+belongs to $\mathcal{L}_e$, because \verb?'&'? is hidden in
+\verb?(a&)?, which is a simple expression (type (SE7) in
+Table~\ref{parser:tab:simple_expressions}).
+
+Note that, when $e$ is the lowest precedence class (\verb?CompoundExpression?), $\mathcal{L}_e$ consists of all possible expressions.
+One can infer $\mathcal{L}_e$ from $\mathcal{L}_{e^+}$. First, when
+$e$ is infix, then
+\begin{equation}
+todo
+\end{equation}
+
+\subsection{Implementation}
+A precedence level (or operator list) is represented by the data type
+below. We impose some constraints: it is impossible to mix several
+associativity types within precedence level. Also, unary operators
+are unique in their precedence level. All constructors starting from
+{\bf TODO} are meant to cope with special cases.
 \begin{code}
-expr :: Bool -> Parser Expr
-expr = foldl makeParser simpleExpr opTable
+data PrecedenceLevel =
+    Prefix                       (LexParser (Expr -> Expr))
+  | Postfix                      (LexParser (Expr -> Expr))
+  | forall a. InfixOp a => Infix [LexParser a]
 \end{code}
-where \inline{opTable :: [OperatorList]} is table of all operators,
-documented in section~\ref{parser:sec:listops}.
-
-The following representation of operators with same precedence
-forbids us to mix different types of associativity.
+However, several infix operators can share the same precedence.
+The typeclass \inline{InfixOp} determines how the different
+subexpressions are combined.
 \begin{code}
-data OperatorList =
-    InfixL    [Parser B.BuiltinSymbol]
-  | InfixR    [Parser B.BuiltinSymbol]
-  | InfixF    [Parser B.BuiltinSymbol]
-  | InfixN    (Parser B.BuiltinSymbol)
-  | Prefix    [Parser B.BuiltinSymbol]
-  | Postfix   [Parser B.BuiltinSymbol]
-  | forall a. SpecialOp a => SpecialInfix [Parser a]
-  | CompoundExpression
-  | Derivative
-  | Multiplication
-  | Span
-
-class (Eq a) => SpecialOp a where
+class InfixOp a where
   makeExpression :: Expr -> [(a, Expr)] -> Expr
 \end{code}
-To any well-behaved operator is associated a parser of type
-\inline{Parser B.BuiltinSymbol} (parsing the operator and returning
-it as a symbol). For example, the parser for \verb?'!'? is
+Using vocabulary from subsection~\ref{parser:subsec:vocabulary},
+the first argument of \inline{makeExpression} represents the
+first subexpression, and the second represents the expression tail.
+
+We need to update simultaneously parsers for terms, expression tails,
+and prefixed expressions. We use the type alias \inline{TrioParser}
+for a triplet of parsers.
+\begin{code}
+type TrioParser  = (LexParser Expr, LexParser (Expr -> Expr), LexParser Expr)
+\end{code}
+The following functions takes a triplet
+\verb?(term, tailExpr, prefixed)?, a precedence level, and returns an
+enhanced parser, able to parse operators from the precedence level.
 \begin{spec}
-  char '!' >> return B.Factorial
+makeParser :: TrioParser -> PrecedenceLevel -> TrioParser
 \end{spec}
-The constructors \inline{InfixL}, \inline{InfixR} and \inline{InfixF}
-respectively accept lists of left, right and flat associative infix
-operators.  The constructor \inline{InfixN} takes a single non
-associative operator. All constructors from \inline{SpecialInfix} are
-there to deal with exceptions and will be explained in
-subsection~\ref{parser:subsec:special_cases}.
+The table of operators \inline{opTable :: [PrecedenceLevel]}
+(documented in section~\ref{parser:sec:listops}) contains all
+operators in order of decreasing precedence.
 
-For the following sections, we need a helper function
-\inline{processOps}, which transforms a list of operator parsers into
-a single parser.
+The final parser \inline{expr} is built by making repeated use of
+\inline{makeParser}.
 \begin{code}
-processOps :: [Parser a] -> Parser a
-processOps = choice . liftM try
+expr :: LexParser Expr
+expr = let first (x, _, _) = x in first finalTrio
+
+anyPrefixed :: LexParser Expr
+anyPrefixed = let third (_, _, x) = x in third finalTrio
+
+finalTrio :: TrioParser
+finalTrio = foldl makeParser initialTrio opTable
+  where initialTrio = (lexeme simpleExpr, const mzero, const mzero)
 \end{code}
 
-\subsection{Infix operators}
-Suppose we have a parser \verb?parser? able to parse expressions
-involving operators of precedence \emph{stricly} higher than some
-\inline{OperatorList}, let us take for example the operator list
-consisting of \verb?===? and \verb?=!=?  (\verb?SameQ? and
-\verb?UnsameQ?, see section~\ref{parser:sec:listops}).
-
-Now, we would like to parse expressions like
-\begin{equation}
-  \label{parser:eq:infix_ops}
-\verb?expr?_0 \,\, \verb?op?_1 \,\, \verb?expr?_1 \,\, \verb?op?_2
-\,\, \cdots \,\, \verb?op?_n \,\, \verb?expr?_n,
-\end{equation}
-where $\verb?op?_i \in \{\verb?===?, \verb?=!=?\}$ and the
-expressions inbetween $\verb?expr?_i$ (for $0 \leq i \leq n-1$)
-are parseable by \verb?parser?. A moment of reflexion convinces us
-that the last expression $\verb?expr?_n$ may begin with a prefix
-operator of lower precedence than $\verb?op?_n$. In this case, this
-expression needs to be parsed with a special parser.
-
-For example, in the expression \verb?a === !b + c? (parsed as
-\verb?SameQ[a, Not[Plus[b, c]]]?),
-\begin{itemize}
-\item the left hand side \verb?a? is parsed by \verb?parser?
-  (who knows all operators of precedence strictly greater than
-  \verb?===? and \verb?=!=?).
-\item the right hand side is parsed by the parser knowning all
-  operators of precedence greater or equal than \verb?'!'?.
-\end{itemize}
-A function collecting all operators in~\eqref{parser:eq:infix_ops}
-is strongly needed. This function would
-decompose~\eqref{parser:eq:infix_ops} into
-\[
-  (\verb?expr?_0, [(\verb?op?_1, \verb?expr?_1), \dots,
-  (\verb?op?_n, \verb?expr?_n)]).
-\]
-Thus we introduce
 \begin{code}
-collect :: (Bool -> Parser Expr) -> Parser a -> Bool -> Parser (Expr, [(a, Expr)])
-collect parser op ignoreEOL =
-  (,) <$> parser ignoreEOL <*> many ((,) <$> op' <*> parser')
-  where parser' = parser ignoreEOL <|> prefixParser ignoreEOL
-        op' = lexeme True op
-\end{code}
-The parser \inline{prefixParser :: Parser Expr} does the job for
-the last expression. It tries to read a prefix operator (if it
-fails here, it does not consume anything), then reads what follows
-according to this prefix.
-\begin{code}
-prefixParser :: Bool -> Parser Expr
-prefixParser ignoreEOL = choice $ map f listPrefixParsers
+makeParser :: TrioParser -> PrecedenceLevel -> TrioParser
+makeParser (term, tailExpr, prefixed) (Infix ops) =
+  (term', tailExpr', prefixed)
   where
-  listParsers = tail $ scanl makeParser simpleExpr opTable
-  listPrefixParsers = filter (isPrefix . fst) (zip opTable listParsers)
-  f (op, parser) = (opToParser op) >> parser ignoreEOL
-  isPrefix (Prefix _) = True
-  isPrefix Span       = True
-  isPrefix _          = False
-  opToParser (Prefix ops) = void $ choice $ liftM lookAhead $ ops
-  opToParser Span = void $ lookAhead $ string $ ";;"
-\end{code}
-Some infix operators do not belong to a well-defined associativity
-class, yet are regular enough to considered as infix operators.  The
-data constructor \inline{SpecialInfix} is dedicated to them.  The
-member function \inline{makeExpression} of the class
-\inline{SpecialOp} specifies how to combine operators and expressions
-collected by \inline{collect}.
-\begin{code}
-makeParser :: (Bool -> Parser Expr) -> OperatorList -> Bool -> Parser Expr
-makeParser parser (SpecialInfix ops) ignoreEOL =
-  (uncurry makeExpression) <$> collect parser (processOps ops) ignoreEOL
-\end{code}
+  term' ignoreEOL = do x <- term ignoreEOL
+                       (do y <- tailInfix ignoreEOL
+                           return $ y x) <|> return x
+  tailInfix ignoreEOL = do
+    xs <- many1 $ (,) <$> infixOp <*> (term ignoreEOL<|> anyPrefixed ignoreEOL)
+    return $ \x -> makeExpression x xs
+  tailExpr' ignoreEOL = tailExpr ignoreEOL <|> tailInfix ignoreEOL
+  infixOp = choice [try (op True) | op <- ops]
 
-\begin{code}
-makeParser parser (InfixL ops) ignoreEOL = do
-  (x, rest) <- collect parser (processOps ops) ignoreEOL
-  return $ foldl (flip ($)) x (map f rest)
-  where f (op, y) = \e -> Cmp (Builtin op) [e, y]
-\end{code}
-%%%%%%%%%%%%%%%%%%%%%%
-Several flat associative operators can share the same precedence
-(the most important case being \verb?===? and \verb?=!=?, operators
-associated to the symbols \verb?SameQ? and \verb?UnsameQ?), see
-Table~\ref{parser:tab:flat_operators} to discover what happens in
-this case.
-\begin{table}[!h]
-  \centering
-  \begin{tabular}{c|c}
-    Input & Parsed expression \\ \hline
-    \texttt{a === b === c =!= d =!= e} &
-        \texttt{UnsameQ[SameQ[a, b, c], d, e]} \\
-    \texttt{a =!= b =!= c === d === e =!= f} &
-        \texttt{UnsameQ[SameQ[UnsameQ[a, b, c], d, e], f]}
-  \end{tabular}
-  \caption{Parsing flat associative operators of the same precedence}
-  \label{parser:tab:flat_operators}
-\end{table}
-\begin{code}
-makeParser parser (InfixF ops) ignoreEOL = do
-  (x, rest) <- collect parser (processOps ops) ignoreEOL
-  return $ foldl (\e (op, es) -> Cmp (Builtin op) (e:es)) x (helper rest)
-  where helper []     = []
-        helper ((op, e):xs) = case (helper xs) of
-          []              -> [(op, [e])]
-          l@((op', es):t) -> if op == op' then (op, e:es):t else (op, [e]):l
-\end{code}
-Let us see what happens in the second example of
-Table~\ref{parser:tab:flat_operators}. The variable \verb?x? is
-bound to \verb?a?, whereas \verb?rest? is bound to
-\verb?[(=!=, b), (=!=, c), (===, d), (===, e), (=!=, [f])]?.
-Then, applying
-\verb?rest? to the helper function
-\begin{spec}
-helper :: Eq a => [(a, b)] -> [(a, [b])]
-\end{spec}
-regroups the neighbouring terms preceded by the same operator
-\begin{verbatim}
-[(=!=, [b, c]), (===, [d, e]), (=!=, f)]
-\end{verbatim}
-and everything is combined using a fold.
-
-It is also possible to parse non associative operators, using
-\inline{InfixN}. Actually, the only non associative operator in
-\emph{Kalkulu} is \verb!'?'! (\verb?PatternTest?). Nevertheless, we
-provide a general way to parse such operators in case the grammar
-evolves.
-\begin{code}
-makeParser parser (InfixN op) ignoreEOL = do
-  x <- parser ignoreEOL
-  (do symbol <- lexeme True $ try $ op
-      y <- parser ignoreEOL
-      notFollowedBy op
-      return $ Cmp (Builtin symbol) [x, y])
-    <|> return x
-\end{code}
-We end this subsection with right associative infix operators.  We
-will not use the \inline{collect} function (base
-on~\eqref{parser:eq:infix_ops}), instead we can write a recursive
-parser using
-\begin{center}
-\texttt{<seqOfTerms> ::= <term> | <term> <op> <seqOfTerm>}
-\end{center}
-\begin{code}
-makeParser parser oplist@(InfixR ops) ignoreEOL = do
-  x <- parser ignoreEOL
-  (do infixOp <- lexeme True $ processOps ops
-      y <- makeParser parser oplist ignoreEOL
-      return $ Cmp (Builtin infixOp) [x, y])
-    <|> return x
-\end{code}
-\subsection{Unary operators}
-We now continue our journey with prefix and postfix operators.
-\begin{code}
-makeParser parser (Postfix ops) ignoreEOL = do
-  x <- parser ignoreEOL
-  postfixOps <- many $ lexeme ignoreEOL $ processOps ops
-  return $ foldl (\e op -> Cmp (Builtin op) [e]) x postfixOps
-\end{code}
-The situation is a trifle more complicated for prefixed expressions
-\verb?op expr?, because \verb?expr? can begin with a prefix
-operator of precedence lower than \verb?op? (example: \verb?++!a?).
-In this case, we have to ``change'' the parser to read \verb?expr?.
-Again, we make use of \inline{prefixParser}.
-\begin{code}
-makeParser parser (Prefix ops) ignoreEOL = do
-  prefixOps <- many $ lexeme True $ processOps ops
-  x <- parser ignoreEOL <|> prefixParser ignoreEOL
-  return $ foldr (\op e -> Cmp (Builtin op) [e]) x prefixOps
-\end{code}
-
-\subsection{Special cases}
-\label{parser:subsec:special_cases}
-
-\subsubsection{CompoundExpression}
-The infix operator \verb?;? has a peculiarity: its arguments may be
-implicit \verb?Null?s, except for the first one: \verb?"a;"? is
-parsed \verb?CompoundExpression[a, Null]}?. Beware that \verb?";;"?
-(the infix notation of \verb?Span?) is not the same as \verb?"; ;"?.
-However, we need not check the character after \verb?;? because
-\verb?Span? has a higher precedence that \verb?CompoundExpression?.
-\begin{code}
-makeParser parser CompoundExpression ignoreEOL = do
-  x     <- parser ignoreEOL
-  rest  <- many $ (op >> expr)
-  return $ if null rest
-     then x
-    else Cmp (Builtin B.CompoundExpression) (x:rest)
-  where expr = parser ignoreEOL <|> return (Builtin B.Null)
-        op   = lexeme ignoreEOL $ (char ';')
-\end{code}
-
-\subsubsection{Derivative}
-Derivation, as in mathematics, is denoted by a single quote \verb?'?.
-It is possible to derivate as many times as desired (\verb?f''''?),
-giving birth to an infinite family of postfix operators.
-\begin{code}
-makeParser parser Derivative ignoreEOL = do
-  x <- parser ignoreEOL
-  n <- toInteger . length <$> (many $ (lexeme ignoreEOL $ char '\''))
-  return $ if n == 0 then x
-             else Cmp (Cmp (Builtin B.Derivative) [Number n]) [x]
-\end{code}
-
-\subsubsection{Multiplication}
-
-\subsubsection{Span}
-It is challenging to categorize \verb?;;?. Is it an operator?  A
-standalone \verb?;;? makes perfect sense as an expression. As an
-operator, it can be postfix, prefix, infix, ternary, and even
-worse. The Table~\ref{parser:span} enumerates all the constructions
-involving \verb?;;?.
-\begin{table}[!h]
-  \centering
-  \begin{tabular}{c|c|c}
-    Case & Input & Parsed expression \\ \hline
-    1 & \verb?a;;b? & \verb?Span[a, b]? \\
-    2 & \verb?a;;?  & \verb?Span[a, All]? \\
-    3 & \verb?;;b? & \verb?Span[1, b]? \\
-    4 & \verb?;;? & \verb?Span[1, All]? \\
-    5 & \verb?a;;b;;step? & \verb?Span[a, b, step]? \\
-    6 & \verb?a;;;;step? & \verb?Span[a, All, step]? \\
-    7 & \verb?;;b;;step? & \verb?Span[1, b, step]? \\
-    8 & \verb?;;;;step? & \verb?Span[1, All, step]?
-  \end{tabular}
-  \caption{Span}
-  \label{parser:span}
-\end{table}
-Now, how should an expression like \verb?a;;b;;c;;;;? be parsed?
-We read from the left and look greedily for the longest match of an
-expression found in Table~\ref{parser:span} (this is exactly what
-the local function \verb?extract? does):
-\[
- \left(\verb?a;;b;;c?\right) \left(\verb?;;?\right)
-\left(\verb?;;?\right).
-\]
-We consequently parse \verb?a;;b;c;;;;? as
-\[
-\verb?Times[Span[a, b, c], Span[1, All], Span[1, All]]?.  
-\]
-But multiplication has a higher precedence than \verb?Span?.
-So, unfortunately, the different \verb?Span? factors will not
-regroup themselves in a \verb?Times?. This is something the
-following snippet has to do manually.
-\begin{code}
-makeParser parser Span ignoreEOL = times <$> extract <$> (many1 opOrExpr)
+makeParser (term, tailExpr, prefixed) (Postfix op) =
+  (term', tailExpr', prefixed)
   where
-  op = try $ lexeme ignoreEOL $ string ";;"
-  opOrExpr :: Parser (Either () Expr)
-  opOrExpr = (op >> (return $ Left ())) <|> (Right <$> parser ignoreEOL)
-  extract (Right a : Left _ : Right b : Left _ : Right step : xs) =
-    (span' [a, b, step]):(extract xs)                                -- Case 5
-  extract (Right a : Left _ : Right b:xs) =
-    (span' [a, b]):(extract xs)                                      -- Case 1
-  extract (Right a : Left _ : Left _ : Right step : xs) =
-    (span' [a, all', step]):(extract xs)                             -- Case 6
-  extract (Right a : Left _ : xs) = (span' [a, all']):(extract xs)   -- Case 2
-  extract (Right _ : Right _ : _) =
-    error "unreachable: implicit Times already taken care of"
-  extract (Right a:xs) = a:(extract xs)                              -- No ;;
-  extract (Left _ : Right b : Left _ : Right step : xs) =
-    (span' [one, b, step]):(extract xs)                              -- Case 7
-  extract (Left _ : Right b : xs) = (span' [one, b]):(extract xs)    -- Case 3
-  extract (Left _ : Left _ : Right step : xs) =
-    (span' [one, all', step]):(extract xs)                           -- Case 8
-  extract (Left _ : xs) = (span' [one, all']):(extract xs)           -- Case 4
-  extract [] = []
-  times []  = error "unreachable: parser Span parses something or fails"
-  times [x] = x
-  times xs  = Cmp (Builtin B.Times) xs
-  span' = Cmp (Builtin B.Span)
-  one   = Number 1
-  all'  = Builtin B.All
+  term' ignoreEOL = do x <- term ignoreEOL
+                       ys <- many $ tailExpr' ignoreEOL
+                       return $ foldl (flip ($)) x ys
+  tailExpr' ignoreEOL = tailExpr ignoreEOL <|> op ignoreEOL
+
+makeParser (term, tailExpr, prefixed) (Prefix op) =
+  (term', tailExpr, prefixed')
+  where
+  term' ignoreEOL = (term ignoreEOL) <|> newPrefixed ignoreEOL
+  newPrefixed ignoreEOL = do prefixOp <- (op True)
+                             x <- term ignoreEOL <|> anyPrefixed ignoreEOL
+                             return $ prefixOp x
+  prefixed' ignoreEOL = prefixed ignoreEOL <|> newPrefixed ignoreEOL
 \end{code}
 
-\subsubsection{Addition}
-The operator \verb?'+'? on its own is flat, yet we categorize
-it as a \inline{SpecialInfix} because of its interaction with
-\verb?'-'?, see Table~\ref{parser:tab:addition} for some examples.
-\begin{table}[!h]
-  \centering
-  \begin{tabular}{c|c}
-    Input & Parsed expression \\ \hline
-    \verb?a + b + c? & \verb?Plus[a, b, c]? \\
-    \verb?a - b + c? & \verb?Plus[a, Times[-1, b], c]? \\
-    \verb?a - 2 + c? & \verb?Plus[a, -2, c]?
-  \end{tabular}
-  \caption{parsing additions}
-  \label{parser:tab:addition}
-\end{table}
 \begin{code}
-data Addition = Plus | Minus deriving Eq
+data InfixF = Composition | StringJoin | NonCommutativeMultiply
+  | Dot | SameQ | UnsameQ | And | Or | Alternative | StringExpression
+  deriving Eq
 
-instance SpecialOp Addition where
-  makeExpression x [] = x
-  makeExpression x xs = Cmp (Builtin B.Plus) (x:(fmap doMinus xs))
-    where doMinus (Plus, y) = y
-          doMinus (Minus, Number i) = Number (-i)
-          doMinus (Minus, y) = Cmp (Builtin B.Times) [Number (-1), y]
+instance InfixOp InfixF where
+  makeExpression h tl = foldl (\e (op, es) -> Cmp (Builtin $ toSymbol op) (e:es)) h (helper tl)
+    where
+    helper [] = []
+    helper ((op, e):xs) = case (helper xs) of
+      []             -> [(op, [e])]
+      l@((op',es):t) -> if op == op' then (op,e:es):t else (op,[e]):l
+    toSymbol Composition = B.Composition
+    toSymbol StringJoin = B.StringJoin
+    toSymbol NonCommutativeMultiply = B.NonCommutativeMultiply
+    toSymbol Dot = B.Dot
+    toSymbol SameQ = B.SameQ
+    toSymbol UnsameQ = B.UnsameQ
+    toSymbol And = B.And
+    toSymbol Or = B.Or
+    toSymbol Alternative = B.Alternative
+    toSymbol StringExpression = B.StringExpression
 \end{code}
 
-\subsubsection{Inequalities}
-Each comparison operator is flat on its own, but something strange
-happens when we mix them together, see~\ref{parser:tab:inequalities}.
-\begin{table}[!h]
-  \centering
-  \begin{tabular}{c|c}
-    Input & Parsed expression \\ \hline
-    \verb?a < b < c? & \verb?Less[a, b, c]? \\
-    \verb?a < b <= c? & \verb?Inequality[a, Less, b, LessEqual, c]? \\
-  \end{tabular}
-  \caption{parsing inequalities}
-  \label{parser:tab:inequalities}
-\end{table}
 \begin{code}
-data Inequality = Equal | Unequal | Greater | Less | GreaterEqual | LessEqual
-                  deriving Eq
+prefix :: String -> B.BuiltinSymbol -> PrecedenceLevel
+prefix opName symb = Prefix (\ignoreEOL ->
+                               lexeme (string opName) ignoreEOL >>
+                               return (\h -> Cmp (Builtin symb) [h]))
 
-instance SpecialOp Inequality where
-  makeExpression x [] = x
-  makeExpression x xs@((op,_):_) = let (ops, es) = unzip xs in
-    if all (== op) ops
-       then Cmp (toExpr op) (x:es)
-       else Cmp (Builtin B.Inequality) args
-    where args = x:(concat $ fmap (\(op',e) -> [toExpr op', e]) xs)
-          toExpr Equal        = Builtin B.Equal
-          toExpr Unequal      = Builtin B.Unequal
-          toExpr Greater      = Builtin B.Greater
-          toExpr Less         = Builtin B.Less
-          toExpr GreaterEqual = Builtin B.GreaterEqual
-          toExpr LessEqual    = Builtin B.LessEqual
-              
-\end{code}
+postfix :: String -> B.BuiltinSymbol -> PrecedenceLevel
+postfix opName symb = Postfix (\ignoreEOL ->
+                                 lexeme (string opName) ignoreEOL >>
+                                 return (\h -> Cmp (Builtin symb) [h]))
 
-\section{List of operators}
-\label{parser:sec:listops}
-\begin{code}
-opTable :: [OperatorList]
+infix' :: InfixOp a => [(String, a)] -> PrecedenceLevel
+infix' xs = Infix [lexeme (string opName >> return op) | (opName, op) <- xs]
+
+opTable :: [PrecedenceLevel]
 opTable = [
-    Prefix       [string "<<"  >> return B.Get],
-    InfixN       (char   '?'   >> return B.PatternTest),
-    Derivative,
-    Postfix      [lexeme True (char '=') >> char '.'
-                               >> return B.Unset],
-    Postfix      [string "++"  >> return B.Increment,
-                  string "--"  >> return B.Decrement],
-    Prefix       [string "++"  >> return B.PreIncrement,
-                  string "--"  >> return B.PreDecrement],
-    InfixF       [string "@*"  >> return B.Composition],
-    InfixR       [string "@@"  >> return B.Apply,
-                  string "/@"  >> return B.Map,
-                  string "//@" >> return B.MapAll],
-    Postfix      [string "!!"  >> return B.Factorial2,
-                  char   '!'   >> return B.Factorial],
-    InfixF       [string "<>"  >> return B.StringJoin],
-    InfixR       [char   '^'   >> return B.Power],
-    InfixF       [string "**"  >> return B.NonCommutativeMultiply],
-    InfixF       [char   '.'   >> notFollowedBy digit
-                               >> return B.Dot],
---    Multiplication,
-    SpecialInfix [char   '+'   >> return Plus,
-                  char   '-'   >> notFollowedBy (oneOf ">=")
-                               >> return Minus],
---    Span,
-    InfixF       [string "===" >> return B.SameQ,
-                  string "=!=" >> return B.UnsameQ],
-    SpecialInfix [string "=="  >> return Equal,
-                  string "=!"  >> return Unequal,
-                  string ">="  >> return GreaterEqual,
-                  string "<="  >> return LessEqual,
-                  char   '>'   >> return Greater,
-                  char   '<'   >> return Less],
-    Prefix       [char   '!'   >> return B.Not],
-    InfixF       [string "&&"  >> return B.And],
-    InfixF       [string "||"  >> return B.Or],
-    Postfix      [string "..." >> return B.RepeatedNull,
-                  string ".."  >> return B.Repeated],
-    InfixF       [char   '|'   >> return B.Alternative],
-    InfixF       [string "~~"  >> return B.StringExpression],
-    InfixL       [string "/;"  >> return B.Condition],
-    InfixR       [string "->"  >> return B.Rule,
-                  string ":>"  >> return B.RuleDelayed],
-    InfixL       [string "/."  >> return B.ReplaceAll,
-                  string "//." >> return B.ReplaceRepeated],
-    InfixR       [string "+="  >> return B.AddTo,
-                  string "-="  >> return B.SubtractFrom,
-                  string "*="  >> return B.TimesBy,
-                  string "/="  >> return B.DivideBy],
-    Postfix      [char   '&'   >> return B.Function],
-    InfixR       [string "^="  >> return B.UpSet,
-                  char   '='   >> return B.Set,
-                  string ":="  >> return B.SetDelayed,
-                  string "^:=" >> return B.UpSetDelayed],
-    InfixL       [string ">>>" >> return B.PutAppend,
-                  string ">>"  >> return B.Put],
-    CompoundExpression]    
+  prefix "<<" B.Get,
+  postfix "++" B.Increment,
+  postfix "--" B.Decrement,
+  prefix "++" B.PreIncrement,
+  prefix "--" B.PreDecrement,
+  postfix "!!" B.Factorial2,
+  postfix "!" B.Factorial,
+  infix' [("<>", StringJoin)],
+  infix' [("**", NonCommutativeMultiply)],
+  Infix [lexeme (char '.' >> notFollowedBy digit >> return Dot)],
+  prefix "!" B.Not,
+  postfix "..." B.RepeatedNull,
+  postfix ".." B.Repeated,
+  postfix "&" B.Function]
 \end{code}
 \end{document}
