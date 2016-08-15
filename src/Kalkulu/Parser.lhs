@@ -690,6 +690,73 @@ instance InfixOp InfixF where
     toSymbol Or = B.Or
     toSymbol Alternative = B.Alternative
     toSymbol StringExpression = B.StringExpression
+
+
+data Inequality = Equal | Unequal | Greater | Less | GreaterEqual | LessEqual
+                  deriving Eq
+
+instance InfixOp Inequality where
+  makeExpression x [] = x
+  makeExpression x xs@((op,_):_) = let (ops, es) = unzip xs in
+    if all (== op) ops
+       then Cmp (toExpr op) (x:es)
+       else Cmp (Builtin B.Inequality) args
+    where args = x:(concat $ fmap (\(op',e) -> [toExpr op', e]) xs)
+          toExpr Equal        = Builtin B.Equal
+          toExpr Unequal      = Builtin B.Unequal
+          toExpr Greater      = Builtin B.Greater
+          toExpr Less         = Builtin B.Less
+          toExpr GreaterEqual = Builtin B.GreaterEqual
+          toExpr LessEqual    = Builtin B.LessEqual
+
+
+data InfixR = Apply | Map | MapAll | Power | Rule | RuleDelayed
+  | AddTo | SubtractFrom | TimesBy | DivideBy | UpSet | Set
+  | SetDelayed | UpSetDelayed
+  deriving Eq
+
+instance InfixOp InfixR where
+  makeExpression x [] = x
+  makeExpression x ((op,x'):xs) =
+    Cmp (Builtin $ toSymbol op) [x, makeExpression x' xs]
+    where
+    toSymbol Apply = B.Apply
+    toSymbol Map = B.Map
+    toSymbol MapAll = B.MapAll
+    toSymbol Power = B.Power
+    toSymbol Rule = B.Rule
+    toSymbol RuleDelayed = B.RuleDelayed
+    toSymbol AddTo = B.AddTo
+    toSymbol SubtractFrom = B.SubtractFrom
+    toSymbol TimesBy = B.TimesBy
+    toSymbol DivideBy = B.DivideBy
+    toSymbol UpSet = B.UpSet
+    toSymbol Set = B.Set
+    toSymbol SetDelayed = B.SetDelayed
+    toSymbol UpSetDelayed = B.UpSetDelayed
+
+data InfixL = Condition | ReplaceAll | ReplaceRepeated | PutAppend | Put
+              deriving Eq
+
+instance InfixOp InfixL where
+  makeExpression x xs = foldl helper x xs
+    where
+    helper e (op, e') = Cmp (Builtin $ toSymbol op) [e, e']
+    toSymbol Condition = B.Condition
+    toSymbol ReplaceAll = B.ReplaceAll
+    toSymbol ReplaceRepeated = B.ReplaceRepeated
+    toSymbol PutAppend = B.PutAppend
+    toSymbol Put = B.Put
+
+
+data Addition = Plus | Minus deriving Eq
+
+instance InfixOp Addition where
+  makeExpression x [] = x
+  makeExpression x xs = Cmp (Builtin B.Plus) (x:(map helper xs))
+    where helper (Plus, y) = y
+          helper (Minus, Number y) = Number (-y)
+          helper (Minus, y) = Cmp (Builtin B.Times) [Number (-1), y]
 \end{code}
 
 \begin{code}
@@ -700,12 +767,12 @@ prefix opName symb = Prefix (\ignoreEOL ->
 
 postfix :: String -> B.BuiltinSymbol -> PrecedenceLevel
 postfix opName symb = Postfix (\ignoreEOL ->
-                                 lexeme (string opName) ignoreEOL >>
+                                 lexeme (try $ string opName) ignoreEOL >>
                                  return (\h -> Cmp (Builtin symb) [h]))
 
 unset :: PrecedenceLevel
 unset = Postfix (\ignoreEOL ->
-                   lexeme (lexeme (char '=') True >> char '.') ignoreEOL >>
+                   lexeme (try (lexeme (char '=') True >> char '.')) ignoreEOL >>
                    return (\h -> Cmp (Builtin B.Unset) [h]))
 
 infix' :: InfixOp a => [(String, a)] -> PrecedenceLevel
@@ -735,20 +802,40 @@ opTable = [
   part,
   cmp,
   prefix "<<" B.Get,
+  -- PatternTest
   derivative,
   unset,
   postfix "++" B.Increment,
   postfix "--" B.Decrement,
   prefix "++" B.PreIncrement,
   prefix "--" B.PreDecrement,
+  infix' [("@*", Composition)],
+  infix' [("@@", Apply), ("/@", Map), ("//@", MapAll)],
   postfix "!!" B.Factorial2,
   postfix "!" B.Factorial,
   infix' [("<>", StringJoin)],
+  infix' [("^", Power)],
   infix' [("**", NonCommutativeMultiply)],
   Infix [lexeme (char '.' >> notFollowedBy digit >> return Dot)],
+  -- Multiplication
+  infix' [("+", Plus), ("-", Minus)],
+  -- Span
+  infix' [("===", SameQ), ("=!=", UnsameQ)],
+  infix' [("==", Equal), ("=!", Unequal), (">=", GreaterEqual),
+          ("<=", LessEqual), (">", Greater), ("<", Less)],
   prefix "!" B.Not,
+  infix' [("&&", And)],
+  infix' [("||", Or)],
   postfix "..." B.RepeatedNull,
   postfix ".." B.Repeated,
-  postfix "&" B.Function]
+  infix' [("|", Alternative)],
+  infix' [("~~", StringExpression)],
+  infix' [("/;", Condition)],
+  infix' [("->", Rule), (":>", RuleDelayed)],
+  infix' [("/.", ReplaceAll), ("//.", ReplaceRepeated)],
+  infix' [("+=", AddTo), ("-=", SubtractFrom), ("*=", TimesBy), ("/=", DivideBy)],
+  postfix "&" B.Function,
+  infix' [("^=", UpSet), ("=", Set), (":=", SetDelayed), ("^:=", UpSetDelayed)],
+  infix' [(">>>", PutAppend), (">>>", Put)]]
 \end{code}
 \end{document}
