@@ -703,12 +703,40 @@ postfix opName symb = Postfix (\ignoreEOL ->
                                  lexeme (string opName) ignoreEOL >>
                                  return (\h -> Cmp (Builtin symb) [h]))
 
+unset :: PrecedenceLevel
+unset = Postfix (\ignoreEOL ->
+                   lexeme (lexeme (char '=') True >> char '.') ignoreEOL >>
+                   return (\h -> Cmp (Builtin B.Unset) [h]))
+
 infix' :: InfixOp a => [(String, a)] -> PrecedenceLevel
 infix' xs = Infix [lexeme (string opName >> return op) | (opName, op) <- xs]
 
+                      
+cmp :: PrecedenceLevel
+cmp = Postfix $ const (do
+  args <- bracketed (void $ char '[') (void $ char ']')
+  return (\h -> Cmp h args))
+
+part :: PrecedenceLevel
+part = Postfix $ const (do
+  args <- bracketed (try $ void $ string "[[") (void $ string "]]")
+  return $ \h -> Cmp (Builtin B.Part) (h:args))
+                   
+                      
+
+
+derivative :: PrecedenceLevel
+derivative = Postfix $ \ignoreEOL -> do
+  n <- toInteger . length <$> (many1 $ (lexeme (char '\'') ignoreEOL))
+  return $  \x -> Cmp (Cmp (Builtin B.Derivative) [Number n]) [x]
+
 opTable :: [PrecedenceLevel]
 opTable = [
+  part,
+  cmp,
   prefix "<<" B.Get,
+  derivative,
+  unset,
   postfix "++" B.Increment,
   postfix "--" B.Decrement,
   prefix "++" B.PreIncrement,
