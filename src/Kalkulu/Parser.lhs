@@ -648,7 +648,7 @@ makeParser (term, tailExpr, prefixed) (Infix ops) =
     xs <- many1 $ (,) <$> infixOp <*> (term ignoreEOL<|> anyPrefixed ignoreEOL)
     return $ \x -> makeExpression x xs
   tailExpr' ignoreEOL = tailExpr ignoreEOL <|> tailInfix ignoreEOL
-  infixOp = choice [try (op True) | op <- ops]
+  infixOp = choice [try (op True) | op <- ops] -- try to remove try
 
 makeParser (term, tailExpr, prefixed) (Postfix op) =
   (term', tailExpr', prefixed)
@@ -667,56 +667,81 @@ makeParser (term, tailExpr, prefixed) (Prefix op) =
                              return $ prefixOp x
   prefixed' ignoreEOL = prefixed ignoreEOL <|> newPrefixed ignoreEOL
 \end{code}
-
+\subsection{Special cases}
+\subsubsection{Flat associative infix operators}
+We already discussed flat associative operators,
+see~\ref{parser:sec:overview}. It remains to be said that in some
+cases, several flat associative operators can share the same
+precedence.  The most important case is \verb?===? and \verb?=!=?,
+operators associated to the symbols \verb?SameQ? and
+\verb?UnsameQ?. The Table~\ref{parser:tab:flat_operators} shows what
+happens in this case.
+\begin{table}[!h]
+  \centering
+  \begin{tabular}{c|c}
+    Input & Parsed expression \\ \hline
+    \texttt{a === b === c =!= d =!= e} &
+        \texttt{UnsameQ[SameQ[a, b, c], d, e]} \\
+    \texttt{a =!= b =!= c === d === e =!= f} &
+        \texttt{UnsameQ[SameQ[UnsameQ[a, b, c], d, e], f]}
+  \end{tabular}
+  \caption{Parsing flat associative operators of the same precedence}
+  \label{parser:tab:flat_operators}
+\end{table}
 \begin{code}
 data InfixF = Composition | StringJoin | NonCommutativeMultiply
   | Dot | SameQ | UnsameQ | And | Or | Alternative | StringExpression
+  | Tilde Name
   deriving Eq
 
 instance InfixOp InfixF where
-  makeExpression h tl = foldl (\e (op, es) -> Cmp (Builtin $ toSymbol op) (e:es)) h (helper tl)
+  makeExpression h tl = foldl (\e (op, es) -> Cmp (toExpr op) (e:es))
+                              h (helper tl)
     where
     helper [] = []
     helper ((op, e):xs) = case (helper xs) of
       []             -> [(op, [e])]
       l@((op',es):t) -> if op == op' then (op,e:es):t else (op,[e]):l
-    toSymbol Composition = B.Composition
-    toSymbol StringJoin = B.StringJoin
-    toSymbol NonCommutativeMultiply = B.NonCommutativeMultiply
-    toSymbol Dot = B.Dot
-    toSymbol SameQ = B.SameQ
-    toSymbol UnsameQ = B.UnsameQ
-    toSymbol And = B.And
-    toSymbol Or = B.Or
-    toSymbol Alternative = B.Alternative
-    toSymbol StringExpression = B.StringExpression
-
-
-data Inequality = Equal | Unequal | Greater | Less | GreaterEqual | LessEqual
-                  deriving Eq
-
-instance InfixOp Inequality where
-  makeExpression x [] = x
-  makeExpression x xs@((op,_):_) = let (ops, es) = unzip xs in
-    if all (== op) ops
-       then Cmp (toExpr op) (x:es)
-       else Cmp (Builtin B.Inequality) args
-    where args = x:(concat $ fmap (\(op',e) -> [toExpr op', e]) xs)
-          toExpr Equal        = Builtin B.Equal
-          toExpr Unequal      = Builtin B.Unequal
-          toExpr Greater      = Builtin B.Greater
-          toExpr Less         = Builtin B.Less
-          toExpr GreaterEqual = Builtin B.GreaterEqual
-          toExpr LessEqual    = Builtin B.LessEqual
-
-
+    toExpr Composition = Builtin B.Composition
+    toExpr StringJoin = Builtin B.StringJoin
+    toExpr NonCommutativeMultiply = Builtin B.NonCommutativeMultiply
+    toExpr Dot = Builtin B.Dot
+    toExpr SameQ = Builtin B.SameQ
+    toExpr UnsameQ = Builtin B.UnsameQ
+    toExpr And = Builtin B.And
+    toExpr Or = Builtin B.Or
+    toExpr Alternative = Builtin B.Alternative
+    toExpr StringExpression = Builtin B.StringExpression
+    toExpr (Tilde x) = Symbol x
+\end{code}
+Let us see what happens in the second example of
+Table~\ref{parser:tab:flat_operators}. The variable \verb?h? is
+bound to \verb?a?, whereas \verb?tl? is bound to
+\verb?[(=!=, b), (=!=, c), (===, d), (===, e), (=!=, [f])]?.
+Then, applying \verb?tl? to the helper function
+\begin{spec}
+helper :: Eq a => [(a, b)] -> [(a, [b])]
+\end{spec}
+regroups the neighbouring terms preceded by the same operator
+\begin{verbatim}
+[(=!=, [b, c]), (===, [d, e]), (=!=, f)]
+\end{verbatim}
+and everything is combined using a fold.
+\subsubsection{Right associative operators}
+\begin{code}
 data InfixR = Apply | Map | MapAll | Power | Rule | RuleDelayed
   | AddTo | SubtractFrom | TimesBy | DivideBy | UpSet | Set
-  | SetDelayed | UpSetDelayed
+  | SetDelayed | UpSetDelayed | DoubleSlash
   deriving Eq
-
+\end{code}
+Dealing with right associativity is easier than left associativity,
+as a simple recursive algorithm is enough to make \inline{InfixR}
+an instance of \inline{InfixOp}.
+\begin{code}
 instance InfixOp InfixR where
   makeExpression x [] = x
+  makeExpression x ((DoubleSlash,x'):xs) =
+    makeExpression (Cmp x' [x]) xs
   makeExpression x ((op,x'):xs) =
     Cmp (Builtin $ toSymbol op) [x, makeExpression x' xs]
     where
@@ -734,21 +759,42 @@ instance InfixOp InfixR where
     toSymbol Set = B.Set
     toSymbol SetDelayed = B.SetDelayed
     toSymbol UpSetDelayed = B.UpSetDelayed
-
-data InfixL = Condition | ReplaceAll | ReplaceRepeated | PutAppend | Put
+    toSymbol DoubleSlash = error "No builtin symbol associated to //"
+\end{code}
+\subsubsection{Left associative operators}
+\begin{code}
+data InfixL = Arobas | Condition | ReplaceAll | ReplaceRepeated
+            | PutAppend | Put
               deriving Eq
 
 instance InfixOp InfixL where
   makeExpression x xs = foldl helper x xs
     where
+    helper e (Arobas, e') = Cmp e [e']
     helper e (op, e') = Cmp (Builtin $ toSymbol op) [e, e']
     toSymbol Condition = B.Condition
     toSymbol ReplaceAll = B.ReplaceAll
     toSymbol ReplaceRepeated = B.ReplaceRepeated
     toSymbol PutAppend = B.PutAppend
     toSymbol Put = B.Put
-
-
+    toSymbol Arobas = error "No builtin symbol associated to @"
+\end{code}
+\subsubsection{Addition}
+The operator \verb?'+'? on its own is flat, yet it deserves a
+special treatment because of its interaction with \verb?'-'?, see
+Table~\ref{parser:tab:addition} for some examples.
+\begin{table}[!h]
+  \centering
+  \begin{tabular}{c|c}
+    Input & Parsed expression \\ \hline
+    \verb?a + b + c? & \verb?Plus[a, b, c]? \\
+    \verb?a - b + c? & \verb?Plus[a, Times[-1, b], c]? \\
+    \verb?a - 2 + c? & \verb?Plus[a, -2, c]?
+  \end{tabular}
+  \caption{parsing additions}
+  \label{parser:tab:addition}
+\end{table}
+\begin{code}
 data Addition = Plus | Minus deriving Eq
 
 instance InfixOp Addition where
@@ -757,6 +803,43 @@ instance InfixOp Addition where
     where helper (Plus, y) = y
           helper (Minus, Number y) = Number (-y)
           helper (Minus, y) = Cmp (Builtin B.Times) [Number (-1), y]
+\end{code}
+
+\subsubsection{Inequalities}
+In most languages (for example in C), a succession of inequalities
+(\verb?a < b < c?) does not have an obvious meaning.  Fortunately,
+this nightmare does not take place with \emph{Kalkulu}. We can even
+mix different comparison operators (\verb?a < b <= c?). Each
+comparison operator is flat on its own, yet we do not categorize them
+in the class of flat operators, because of the possibility to combine
+them, see~\ref{parser:tab:inequalities}.
+\begin{table}[!h]
+  \centering
+  \begin{tabular}{c|c}
+    Input & Parsed expression \\ \hline
+    \verb?a < b < c? & \verb?Less[a, b, c]? \\
+    \verb?a < b <= c? & \verb?Inequality[a, Less, b, LessEqual, c]? \\
+  \end{tabular}
+  \caption{parsing inequalities}
+  \label{parser:tab:inequalities}
+\end{table}
+\begin{code}
+data Inequality = Equal | Unequal | Greater | Less | GreaterEqual | LessEqual
+                  deriving Eq
+
+instance InfixOp Inequality where
+  makeExpression x [] = x
+  makeExpression x xs@((op,_):_) = let (ops, es) = unzip xs in
+    if all (== op) ops
+       then Cmp (toExpr op) (x:es)
+       else Cmp (Builtin B.Inequality) args
+    where args = x:(concat $ fmap (\(op',e) -> [toExpr op', e]) xs)
+          toExpr Equal        = Builtin B.Equal
+          toExpr Unequal      = Builtin B.Unequal
+          toExpr Greater      = Builtin B.Greater
+          toExpr Less         = Builtin B.Less
+          toExpr GreaterEqual = Builtin B.GreaterEqual
+          toExpr LessEqual    = Builtin B.LessEqual
 \end{code}
 
 \begin{code}
@@ -778,16 +861,23 @@ unset = Postfix (\ignoreEOL ->
 infix' :: InfixOp a => [(String, a)] -> PrecedenceLevel
 infix' xs = Infix [lexeme (string opName >> return op) | (opName, op) <- xs]
 
+tilde :: PrecedenceLevel
+tilde = Infix [\ignoreEOL -> do void $ lexeme (char '~') True
+                                s <- lexeme identifier True
+                                void $ lexeme (char '~') ignoreEOL
+                                return $ Tilde s]
+                                
                       
 cmp :: PrecedenceLevel
-cmp = Postfix $ const (do
-  args <- bracketed (void $ char '[') (void $ char ']')
-  return (\h -> Cmp h args))
+cmp = Postfix $ \ignoreEOL -> do
+  args <- bracketed (void $ char '[') (lexeme (void $ char ']') ignoreEOL)
+  return (\h -> Cmp h args)
 
 part :: PrecedenceLevel
-part = Postfix $ const (do
-  args <- bracketed (try $ void $ string "[[") (void $ string "]]")
-  return $ \h -> Cmp (Builtin B.Part) (h:args))
+part = Postfix $ \ignoreEOL -> do
+  args <- bracketed (try $ void $ string "[[")
+                    (lexeme (void $ string "]]") ignoreEOL)
+  return $ \h -> Cmp (Builtin B.Part) (h:args)
                    
                       
 
@@ -797,6 +887,11 @@ derivative = Postfix $ \ignoreEOL -> do
   n <- toInteger . length <$> (many1 $ (lexeme (char '\'') ignoreEOL))
   return $  \x -> Cmp (Cmp (Builtin B.Derivative) [Number n]) [x]
 
+
+\end{code}
+\section{List of operators}
+\label{parser:tab:listops}
+\begin{code}
 opTable :: [PrecedenceLevel]
 opTable = [
   part,
@@ -836,6 +931,9 @@ opTable = [
   infix' [("+=", AddTo), ("-=", SubtractFrom), ("*=", TimesBy), ("/=", DivideBy)],
   postfix "&" B.Function,
   infix' [("^=", UpSet), ("=", Set), (":=", SetDelayed), ("^:=", UpSetDelayed)],
-  infix' [(">>>", PutAppend), (">>>", Put)]]
+  infix' [(">>>", PutAppend), (">>>", Put)],
+  tilde, -- check precedence
+  infix' [("@", Arobas)], -- check precedence
+  infix' [("//", DoubleSlash)]] -- check precedence
 \end{code}
 \end{document}
