@@ -1,4 +1,5 @@
 \documentclass[main.tex]{subfiles}
+\def\hideFromLaTeX#{}
 
 \begin{document}
 \chapter{Parsing}
@@ -13,6 +14,13 @@ import Text.ParserCombinators.Parsec hiding (space)
 
 import qualified Kalkulu.Builtin as B
 \end{code}
+
+\hideFromLaTeX{
+\begin{code}
+data UnaryMultiplication = UPlus | UMinus
+data Multiplication = Times | Divide
+\end{code}
+}
 
 \section{Overview of the grammar}
 \label{parser:sec:overview}
@@ -176,7 +184,7 @@ data Expr =
   | Symbol               Name
   | Builtin              B.BuiltinSymbol
   | Cmp                  Expr [Expr]
-    deriving Show 
+    deriving Show
 \end{code}
 The \emph{name} field of a \inline{Symbol} contains its name,
 \emph{as it is read}, without further interpretation: it could be
@@ -261,7 +269,7 @@ parses simple expressions of type (SE2).
 string' :: Parser Expr
 string' = liftM String $ between (char '"') (char '"')
                                  (many (noneOf "\"\\" <|> escapeChar))
-              
+
 escapeChar :: Parser Char
 escapeChar = do
   _ <- char '\\'
@@ -500,10 +508,10 @@ e^+ := \min \{e' \mid e' > e\}.
 Often, only one operator in a principal level
 appears, in this case, we call it the \emph{principal operator}.  In
 order to avoid cumbersome notations, we shall avoid the notion of
-principal precedence level, and present only examples with a
+principal precedence level, and present mainly examples with a
 principal operator.
 
-The principal operator divide the whole expression into
+The principal operator divides the whole expression into
 subexpressions. We call \emph{expression tail} what is found right of
 the first subexpression, see Table~\ref{parser:tab:principal_op} for
 some examples.
@@ -524,6 +532,12 @@ some examples.
   \caption{Principal operators and expression tails}
   \label{parser:tab:principal_op}
 \end{table}
+One should see the expression tail as a function, which maps
+a missing first subexpression to the whole expression, for example
+in case 1:
+\[
+\verb?a? \mapsto \verb?Plus[a, Times[b, c], d]?.
+\]
 
 Note that (case 2 of Table~\ref{parser:tab:principal_op}) we consider
 the argument list in a composite expression as a postfix operator.
@@ -545,12 +559,6 @@ Four situations can show up where this holds wrong:
   principal operator is a prefix operator of precedence lower than
   \verb?op? (case 7).
 \end{itemize}
-Last, one should see the expression tail as a function, which maps
-a missing first subexpression to the whole expression, for example
-in case 1:
-\[
-\verb?a? \mapsto \verb?Plus[a, Times[b, c], d]?.
-\]
 \subsection{Algorithm}
 \label{parser:sub:algorithm}
 
@@ -576,13 +584,43 @@ belongs to $\mathcal{L}_e$, because \verb?'&'? is hidden in
 \verb?(a&)?, which is a simple expression (type (SE7) in
 Table~\ref{parser:tab:simple_expressions}).
 
-Note that, when $e$ is the lowest precedence class (\verb?CompoundExpression?), $\mathcal{L}_e$ consists of all possible expressions.
-One can infer $\mathcal{L}_e$ from $\mathcal{L}_{e^+}$. First, when
-$e$ is infix, then
-\begin{equation}
-todo
-\end{equation}
+Note that, when $e$ is the lowest precedence class
+(\verb?CompoundExpression?), $\mathcal{L}_e$ consists of all possible
+expressions.  One can infer $\mathcal{L}_e$ from
+$\mathcal{L}_{e^+}$. First, when $e$ is infix, then
+\begin{verbatim}
+<term>_e     := <term>_e+ (<op>_e (<term>_e+ | <anyPrefixed>))*
+<tailExpr>_e := <tailExpr>_e+ | (<op>_e (<term>_e+ | <anyPrefixed>))*
+<prefixed>_e := <prefixed>_e+
+\end{verbatim}
+Here, \verb?<term>_e? denotes a generic element of $\mathcal{L}_e$,
+and \verb?<op>_e? denotes any operator of the precedence level $e$.
+Finally \verb?<anyPrefixed>? denotes a generic expression whose
+principal operator is a prefix (even those of precedence lower than
+$e$).  When $e$ is postfix, one has
+\begin{verbatim}
+<term>_e     := <term>_e+ (<tailExpr>_e)*
+<tailExpr>_e := <tailExpr>_e+ | <op>_e
+<prefixed>_e := <prefixed>_e+
+\end{verbatim}
+The intuition is the following. The expression \verb?a& + b?  does
+not belong to $\mathcal{L}_{\{+,-\}}$ because of $\verb?&?$, but it
+belongs to $\mathcal{L}_{\{\texttt{\&}\}}$. Thus, expressions in
+$\mathcal{L}_{\{\texttt{\&}\}}$ are not only of the form
+\verb?expr &?: one must have the right to add as many expression
+tails as wanted: \verb?expr & * a * b? or even
+\verb?expr & * a * b + c + d?. This is why we introduced
+\verb?<tailExpr>_e?, which represents any expression tail for a
+principal operator of precedence $\geq e$.  Finally,
+\verb?<prefixed>_e? is needed because of the presence of
+\verb?<anyPrefixed>? above.
 
+When $e$ is prefix, one has
+\begin{verbatim}
+<term>_e     := <term>_e+ | <op>_e (<term>_e | <anyPrefixed>_e)
+<tailExpr>_e := <tailExpr>_e+
+<prefixed>_e := <prefixed>_e+ | <op>_e (<term>_e | <anyPrefixed>_e)
+\end{verbatim}
 \subsection{Implementation}
 A precedence level (or operator list) is represented by the data type
 below. We impose some constraints: it is impossible to mix several
@@ -597,9 +635,9 @@ data PrecedenceLevel =
   | CompoundExpression
   | Multiplication
 \end{code}
-However, several infix operators can share the same precedence.
-The typeclass \inline{InfixOp} determines how the different
-subexpressions are combined.
+As opposed to unary operators, several infix operators can share the
+same precedence.  The typeclass \inline{InfixOp} determines how the
+different subexpressions are combined.
 \begin{code}
 class InfixOp a where
   makeExpression :: Expr -> [(a, Expr)] -> Expr
@@ -627,17 +665,18 @@ operators in order of decreasing precedence.
 The final parser \inline{expr} is built by making repeated use of
 \inline{makeParser}.
 \begin{code}
+finalTrio :: TrioParser
+finalTrio = foldl makeParser initialTrio opTable
+  where initialTrio = (lexeme simpleExpr, const mzero, const mzero)
+
 expr :: LexParser Expr
 expr = let first (x, _, _) = x in first finalTrio
 
 anyPrefixed :: LexParser Expr
 anyPrefixed = let third (_, _, x) = x in third finalTrio
-
-finalTrio :: TrioParser
-finalTrio = foldl makeParser initialTrio opTable
-  where initialTrio = (lexeme simpleExpr, const mzero, const mzero)
 \end{code}
-
+We implement the algorithm described in
+subsection~\ref{parser:sub:algorithm}.
 \begin{code}
 makeParser :: TrioParser -> PrecedenceLevel -> TrioParser
 makeParser (term, tailExpr, prefixed) (Infix ops) =
@@ -651,49 +690,6 @@ makeParser (term, tailExpr, prefixed) (Infix ops) =
     return $ \x -> makeExpression x xs
   tailExpr' ignoreEOL = tailExpr ignoreEOL <|> tailInfix ignoreEOL
   infixOp = choice [try (op True) | op <- ops] -- try to remove try
-\end{code}
-
-\begin{code}
-makeParser (term, tailExpr, prefixed) CompoundExpression =
-  (term', tailExpr, prefixed)
-  where
-  term' ignoreEOL = do
-    x <- term ignoreEOL
-    y <- many $ subexpr ignoreEOL
-    return $ if null y then x else Cmp (Builtin B.CompoundExpression) (x:y)
-  subexpr ignoreEOL = lexeme (char ';') ignoreEOL >>
-    (term ignoreEOL <|> return (Builtin B.Null))
-\end{code}
-
-\begin{code}
-makeParser (term, tailExpr, prefixed) Multiplication =
-  (term', tailExpr', prefixed)
-  where
-  unaryPlus  = lexeme (char '+') True >> return UnaryPlus
-  unaryMinus = lexeme (char '-') True >> return UnaryMinus
-  divide = lexeme (char '/') True >> return Divide
-  times  = ((void $ lexeme (char '*') True) <|> (notFollowedBy $ oneOf "+-"))
-            >> return Times
-  pmTerm ignoreEOL = (,) <$> (many $ choice [unaryPlus, unaryMinus]) <*> term ignoreEOL
-  infixOp = divide <|> times
-  term' ignoreEOL = do x <- pmTerm ignoreEOL
-                       (do y <- tailInfix ignoreEOL
-                           return $ addTimes $ (factors x)++(tailFactors y))
-                         <|> return (addTimes (factors x))
-  tailInfix ignoreEOL = many1 $ (,) <$> infixOp <*> pmTerm ignoreEOL -- no anyPrefixed
-  factors ([], x) = [x] -- subexpr with pm to factors
-  factors ([UnaryMinus], Number x) = [Number (-x)]
-  factors (UnaryMinus:xs, y) = (Number (-1)):factors (xs, y)
-  factors (UnaryPlus:xs, y) = [Cmp (Builtin B.Plus) [addTimes (factors (xs, y))]]
-  addTimes [e] = e
-  addTimes es = Cmp (Builtin B.Times) es
-  applyInfix (Times,  x) = factors x
-  applyInfix (Divide, x) =
-    [Cmp (Builtin B.Power) [addTimes (factors x), Number (-1)]]
-  tailFactors es = concat (map applyInfix es)
-  tailExpr' ignoreEOL = tailExpr ignoreEOL <|> (do
-    y <- tailInfix ignoreEOL
-    return $ \h -> addTimes (h:tailFactors y))
 \end{code}
 
 \begin{code}
@@ -714,13 +710,137 @@ makeParser (term, tailExpr, prefixed) (Prefix op) =
                              return $ prefixOp x
   prefixed' ignoreEOL = prefixed ignoreEOL <|> newPrefixed ignoreEOL
 \end{code}
-\begin{code}
-data UnaryMultiplication = UnaryPlus | UnaryMinus
 
-data Multiplication = Times | Divide
-\end{code}
 \subsection{Special cases}
+\subsubsection{Compound expressions}
+\begin{code}
+makeParser (term, tailExpr, prefixed) CompoundExpression =
+  (term', tailExpr, prefixed)
+  where
+  term' ignoreEOL = do
+    x <- term ignoreEOL
+    y <- many $ subexpr ignoreEOL
+    return $ if null y then x else Cmp (Builtin B.CompoundExpression) (x:y)
+  subexpr ignoreEOL = lexeme (char ';') ignoreEOL >>
+    (term ignoreEOL <|> return (Builtin B.Null))
+\end{code}
+
+\subsubsection{Multiplication}
+
+This part is rather tricky for many reasons. First, there are four
+operators related to multiplication: two infix operators \verb?'*'?
+and \verb?'/'? (\verb?Times? and \verb?Divide?) and two prefix
+operators \verb?'+'? and \verb?'-'? (the unary \verb?Plus? and
+\verb?Minus?). It is the only time in \emph{Kalkulu} that prefix
+and infix operators belong to the same precedence level.
+
+An other danger is that \verb?Times? can be implicit: \verb?2a? is
+the same as \verb?2*a?. Warning! \verb?2+a? is not the same as
+\verb?2(+a)?, as you might guess. But this has to be carefully
+verified, because the parser does not ``know'' addition yet (it has
+a lower precedence).
+
+We define the types
+\begin{spec}
+data UnaryMultiplication = UPlus | UMinus
+data Multiplication = Times | Divide
+\end{spec}
+Below, \inline{pmTimes :: Parser ([UnaryMultiplication], Expr)} is a
+parser for a term (factor) preceded by any number of \verb?Plus?  or
+\verb?Minus?. An expression like \verb?-2? is parsed as an atom, but
+this kind of simplification does not occur any more if we pile up
+prefix operators: \verb?- -2? is parsed as \verb?Times[-1, -2]?.
+The function \inline{factors} allows to transform a \inline{pmTerm}
+into a series of factors.
+\begin{code}
+makeParser (term, tailExpr, prefixed) Multiplication =
+  (term', tailExpr', prefixed)
+  where
+  unaryPlus  = lexeme (char '+') True >> return UPlus
+  unaryMinus = lexeme (char '-') True >> return UMinus
+  divide = lexeme (char '/') True >> return Divide
+  times  = ((void $ lexeme (char '*') True) <|> (notFollowedBy $ oneOf "+-"))
+            >> return Times
+  pmTerm ignoreEOL = (,) <$> (many $ choice [unaryPlus, unaryMinus])
+                         <*> term ignoreEOL
+  infixOp = divide <|> times
+  term' ignoreEOL = do x <- pmTerm ignoreEOL
+                       (do y <- tailInfix ignoreEOL
+                           return $ addTimes $ (factors x)++(tailFactors y))
+                         <|> return (addTimes (factors x))
+  tailInfix ignoreEOL = many1 $ (,) <$> infixOp <*> pmTerm ignoreEOL
+  factors ([], x) = [x]
+  factors ([UMinus], Number x) = [Number (-x)]
+  factors (UMinus:xs, y) = (Number (-1)):factors (xs, y)
+  factors (UPlus:xs, y) = [Cmp (Builtin B.Plus) [addTimes (factors (xs, y))]]
+  addTimes [e] = e
+  addTimes es = Cmp (Builtin B.Times) es
+  applyInfix (Times,  x) = factors x
+  applyInfix (Divide, x) =
+    [Cmp (Builtin B.Power) [addTimes (factors x), Number (-1)]]
+  tailFactors es = concat (map applyInfix es)
+  tailExpr' ignoreEOL = tailExpr ignoreEOL <|> (do
+    y <- tailInfix ignoreEOL
+    return $ \h -> addTimes (h:tailFactors y))
+\end{code}
+
+\subsubsection{PatternTest}
+
+\subsubsection{Span}
+It is challenging to categorize \verb?;;?. Is it an operator?  A
+standalone \verb?;;? makes perfect sense as an expression. As an
+operator, it can be postfix, prefix, infix, ternary, and even
+worse. The Table~\ref{parser:span} enumerates all the constructions
+involving \verb?;;?.
+\begin{table}[!h]
+  \centering
+  \begin{tabular}{c|c|c}
+    Case & Input & Parsed expression \\ \hline
+    1 & \verb?a;;b? & \verb?Span[a, b]? \\
+    2 & \verb?a;;?  & \verb?Span[a, All]? \\
+    3 & \verb?;;b? & \verb?Span[1, b]? \\
+    4 & \verb?;;? & \verb?Span[1, All]? \\
+    5 & \verb?a;;b;;step? & \verb?Span[a, b, step]? \\
+    6 & \verb?a;;;;step? & \verb?Span[a, All, step]? \\
+    7 & \verb?;;b;;step? & \verb?Span[1, b, step]? \\
+    8 & \verb?;;;;step? & \verb?Span[1, All, step]?
+  \end{tabular}
+  \caption{Span}
+  \label{parser:span}
+\end{table}
+Now, how should an expression like \verb?a;;b;;c;;;;? be parsed?
+We read from the left and look greedily for the longest match of an
+expression found in Table~\ref{parser:span} (this is exactly what
+the local function \verb?extract? does):
+\[
+ \left(\verb?a;;b;;c?\right) \left(\verb?;;?\right)
+\left(\verb?;;?\right).
+\]
+We consequently parse \verb?a;;b;c;;;;? as
+\[
+\verb?Times[Span[a, b, c], Span[1, All], Span[1, All]]?.  
+\]
+But multiplication has a higher precedence than \verb?Span?.
+So, unfortunately, the different \verb?Span? factors will not
+regroup themselves in a \verb?Times?. This is something the
+following snippet has to do manually.
+\begin{code}
+-- TODO!
+\end{code}
+
+\subsection{Associativity}
 \subsubsection{Flat associative infix operators}
+Below, we find the list of flat associative operators in
+\emph{Kalkulu}. As in Haskell, it is possible to transform a symbol
+into an infix operator (by surrounding it with \verb?'~'?). In the
+expression \verb?a ~symb~ b?, all of \verb?~symb~? is considered as
+an operator, represented by \inline{Tilde "symb"}.
+\begin{code}
+data InfixF = Composition | StringJoin | NonCommutativeMultiply
+  | Dot | SameQ | UnsameQ | And | Or | Alternative | StringExpression
+  | Tilde Name
+  deriving Eq
+\end{code}
 We already discussed flat associative operators,
 see~\ref{parser:sec:overview}. It remains to be said that in some
 cases, several flat associative operators can share the same
@@ -741,11 +861,6 @@ happens in this case.
   \label{parser:tab:flat_operators}
 \end{table}
 \begin{code}
-data InfixF = Composition | StringJoin | NonCommutativeMultiply
-  | Dot | SameQ | UnsameQ | And | Or | Alternative | StringExpression
-  | Tilde Name
-  deriving Eq
-
 instance InfixOp InfixF where
   makeExpression h tl = foldl (\e (op, es) -> Cmp (toExpr op) (e:es))
                               h (helper tl)
@@ -907,8 +1022,8 @@ postfix opName symb = Postfix (\ignoreEOL ->
 
 unset :: PrecedenceLevel
 unset = Postfix (\ignoreEOL ->
-                   lexeme (try (lexeme (char '=') True >> char '.')) ignoreEOL >>
-                   return (\h -> Cmp (Builtin B.Unset) [h]))
+  lexeme (try (lexeme (char '=') True >> char '.')) ignoreEOL >>
+  return (\h -> Cmp (Builtin B.Unset) [h]))
 
 infix' :: InfixOp a => [(String, a)] -> PrecedenceLevel
 infix' xs = Infix [lexeme (string opName >> return op) | (opName, op) <- xs]
@@ -918,11 +1033,11 @@ tilde = Infix [\ignoreEOL -> do void $ lexeme (char '~') True
                                 s <- lexeme identifier True
                                 void $ lexeme (char '~') ignoreEOL
                                 return $ Tilde s]
-                                
-                      
+
 cmp :: PrecedenceLevel
 cmp = Postfix $ \ignoreEOL -> do
-  args <- bracketed (void $ char '[') (lexeme (void $ char ']') ignoreEOL)
+  args <- bracketed (void $ char '[')
+                    (lexeme (void $ char ']') ignoreEOL)
   return (\h -> Cmp h args)
 
 part :: PrecedenceLevel
@@ -930,9 +1045,6 @@ part = Postfix $ \ignoreEOL -> do
   args <- bracketed (try $ void $ string "[[")
                     (lexeme (void $ string "]]") ignoreEOL)
   return $ \h -> Cmp (Builtin B.Part) (h:args)
-                   
-                      
-
 
 derivative :: PrecedenceLevel
 derivative = Postfix $ \ignoreEOL -> do
@@ -942,7 +1054,7 @@ derivative = Postfix $ \ignoreEOL -> do
 
 \end{code}
 \section{List of operators}
-\label{parser:tab:listops}
+\label{parser:sec:listops}
 \begin{code}
 opTable :: [PrecedenceLevel]
 opTable = [
@@ -980,7 +1092,8 @@ opTable = [
   infix' [("/;", Condition)],
   infix' [("->", Rule), (":>", RuleDelayed)],
   infix' [("/.", ReplaceAll), ("//.", ReplaceRepeated)],
-  infix' [("+=", AddTo), ("-=", SubtractFrom), ("*=", TimesBy), ("/=", DivideBy)],
+  infix' [("+=", AddTo), ("-=", SubtractFrom),
+          ("*=", TimesBy), ("/=", DivideBy)],
   postfix "&" B.Function,
   infix' [("^=", UpSet), ("=", Set), (":=", SetDelayed), ("^:=", UpSetDelayed)],
   infix' [(">>>", PutAppend), (">>>", Put)],
