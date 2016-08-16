@@ -25,7 +25,7 @@ list of some subtleties:
 \begin{itemize}
 \item The purpose of parentheses is to modify the order of the
   precedence rules (\emph{e.g} the expression \verb?a*(b+c)? is
-  parsed \verb?Times[a, Plus[b, c]]}?. They are not used for function
+  parsed \verb?Times[a, Plus[b, c]]?). They are not used for function
   calls.  Instead, we use square brackets\footnote{Strictly speaking,
     there is no such a thing as ``function calls'' in \emph{Kalkulu},
     though some expressions like \texttt{f[x]} look like function
@@ -594,6 +594,7 @@ data PrecedenceLevel =
     Prefix                       (LexParser (Expr -> Expr))
   | Postfix                      (LexParser (Expr -> Expr))
   | forall a. InfixOp a => Infix [LexParser a]
+  | Multiplication
 \end{code}
 However, several infix operators can share the same precedence.
 The typeclass \inline{InfixOp} determines how the different
@@ -649,7 +650,40 @@ makeParser (term, tailExpr, prefixed) (Infix ops) =
     return $ \x -> makeExpression x xs
   tailExpr' ignoreEOL = tailExpr ignoreEOL <|> tailInfix ignoreEOL
   infixOp = choice [try (op True) | op <- ops] -- try to remove try
+\end{code}
 
+\begin{code}
+makeParser (term, tailExpr, prefixed) Multiplication =
+  (term', tailExpr', prefixed)
+  where
+  unaryPlus  = lexeme (char '+') True >> return UnaryPlus
+  unaryMinus = lexeme (char '-') True >> return UnaryMinus
+  divide = lexeme (char '/') True >> return Divide
+  times  = ((void $ lexeme (char '*') True) <|> (notFollowedBy $ oneOf "+-"))
+            >> return Times
+  pmTerm ignoreEOL = (,) <$> (many $ choice [unaryPlus, unaryMinus]) <*> term ignoreEOL
+  infixOp = divide <|> times
+  term' ignoreEOL = do x <- pmTerm ignoreEOL
+                       (do y <- tailInfix ignoreEOL
+                           return $ addTimes $ (factors x)++(tailFactors y))
+                         <|> return (addTimes (factors x))
+  tailInfix ignoreEOL = many1 $ (,) <$> infixOp <*> pmTerm ignoreEOL -- no anyPrefixed
+  factors ([], x) = [x] -- subexpr with pm to factors
+  factors ([UnaryMinus], Number x) = [Number (-x)]
+  factors (UnaryMinus:xs, y) = (Number (-1)):factors (xs, y)
+  factors (UnaryPlus:xs, y) = [Cmp (Builtin B.Plus) [addTimes (factors (xs, y))]]
+  addTimes [e] = e
+  addTimes es = Cmp (Builtin B.Times) es
+  applyInfix (Times,  x) = factors x
+  applyInfix (Divide, x) =
+    [Cmp (Builtin B.Power) [addTimes (factors x), Number (-1)]]
+  tailFactors es = concat (map applyInfix es)
+  tailExpr' ignoreEOL = tailExpr ignoreEOL <|> (do
+    y <- tailInfix ignoreEOL
+    return $ \h -> addTimes (h:tailFactors y))
+\end{code}
+
+\begin{code}
 makeParser (term, tailExpr, prefixed) (Postfix op) =
   (term', tailExpr', prefixed)
   where
@@ -666,6 +700,11 @@ makeParser (term, tailExpr, prefixed) (Prefix op) =
                              x <- term ignoreEOL <|> anyPrefixed ignoreEOL
                              return $ prefixOp x
   prefixed' ignoreEOL = prefixed ignoreEOL <|> newPrefixed ignoreEOL
+\end{code}
+\begin{code}
+data UnaryMultiplication = UnaryPlus | UnaryMinus
+
+data Multiplication = Times | Divide
 \end{code}
 \subsection{Special cases}
 \subsubsection{Flat associative infix operators}
@@ -912,9 +951,9 @@ opTable = [
   infix' [("^", Power)],
   infix' [("**", NonCommutativeMultiply)],
   Infix [lexeme (char '.' >> notFollowedBy digit >> return Dot)],
-  -- Multiplication
-  infix' [("+", Plus), ("-", Minus)],
-  -- Span
+  Multiplication,
+  infix' [("+", P:669:48:lus), ("-", Minus)],
+  -- Span,
   infix' [("===", SameQ), ("=!=", UnsameQ)],
   infix' [("==", Equal), ("=!", Unequal), (">=", GreaterEqual),
           ("<=", LessEqual), (">", Greater), ("<", Less)],
@@ -932,8 +971,8 @@ opTable = [
   postfix "&" B.Function,
   infix' [("^=", UpSet), ("=", Set), (":=", SetDelayed), ("^:=", UpSetDelayed)],
   infix' [(">>>", PutAppend), (">>>", Put)],
-  tilde, -- check precedence
-  infix' [("@", Arobas)], -- check precedence
+  tilde,                        -- check precedence
+  infix' [("@", Arobas)],       -- check precedence
   infix' [("//", DoubleSlash)]] -- check precedence
 \end{code}
 \end{document}
