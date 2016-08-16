@@ -588,12 +588,13 @@ A precedence level (or operator list) is represented by the data type
 below. We impose some constraints: it is impossible to mix several
 associativity types within precedence level. Also, unary operators
 are unique in their precedence level. All constructors starting from
-{\bf TODO} are meant to cope with special cases.
+\inline{CompoundExpression} are meant to cope with special cases.
 \begin{code}
 data PrecedenceLevel =
     Prefix                       (LexParser (Expr -> Expr))
   | Postfix                      (LexParser (Expr -> Expr))
   | forall a. InfixOp a => Infix [LexParser a]
+  | CompoundExpression
   | Multiplication
 \end{code}
 However, several infix operators can share the same precedence.
@@ -650,6 +651,18 @@ makeParser (term, tailExpr, prefixed) (Infix ops) =
     return $ \x -> makeExpression x xs
   tailExpr' ignoreEOL = tailExpr ignoreEOL <|> tailInfix ignoreEOL
   infixOp = choice [try (op True) | op <- ops] -- try to remove try
+\end{code}
+
+\begin{code}
+makeParser (term, tailExpr, prefixed) CompoundExpression =
+  (term', tailExpr, prefixed)
+  where
+  term' ignoreEOL = do
+    x <- term ignoreEOL
+    y <- many $ subexpr ignoreEOL
+    return $ if null y then x else Cmp (Builtin B.CompoundExpression) (x:y)
+  subexpr ignoreEOL = lexeme (char ';') ignoreEOL >>
+    (term ignoreEOL <|> return (Builtin B.Null))
 \end{code}
 
 \begin{code}
@@ -952,7 +965,7 @@ opTable = [
   infix' [("**", NonCommutativeMultiply)],
   Infix [lexeme (char '.' >> notFollowedBy digit >> return Dot)],
   Multiplication,
-  infix' [("+", P:669:48:lus), ("-", Minus)],
+  infix' [("+", Plus), ("-", Minus)],
   -- Span,
   infix' [("===", SameQ), ("=!=", UnsameQ)],
   infix' [("==", Equal), ("=!", Unequal), (">=", GreaterEqual),
@@ -973,6 +986,7 @@ opTable = [
   infix' [(">>>", PutAppend), (">>>", Put)],
   tilde,                        -- check precedence
   infix' [("@", Arobas)],       -- check precedence
-  infix' [("//", DoubleSlash)]] -- check precedence
+  infix' [("//", DoubleSlash)],
+  CompoundExpression] -- check precedence
 \end{code}
 \end{document}
