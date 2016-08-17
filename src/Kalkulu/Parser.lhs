@@ -634,6 +634,7 @@ data PrecedenceLevel =
   | forall a. InfixOp a => Infix [LexParser a]
   | CompoundExpression
   | Multiplication
+  | PatternTest
 \end{code}
 As opposed to unary operators, several infix operators can share the
 same precedence.  The typeclass \inline{InfixOp} determines how the
@@ -756,9 +757,12 @@ into a series of factors.
 makeParser (term, tailExpr, prefixed) Multiplication =
   (term', tailExpr', prefixed)
   where
-  unaryPlus  = lexeme (char '+') True >> return UPlus
-  unaryMinus = lexeme (char '-') True >> return UMinus
-  divide = lexeme (char '/') True >> return Divide
+  unaryPlus  = try (lexeme (char '+' >> notFollowedBy (char '+')) True
+                    >> return UPlus)
+  unaryMinus = try (lexeme (char '-' >> notFollowedBy (char '-')) True
+                    >> return UMinus)
+  divide = try (lexeme (char '/' >> notFollowedBy (oneOf "/.")) True
+                >> return Divide)
   times  = ((void $ lexeme (char '*') True) <|> (notFollowedBy $ oneOf "+-"))
             >> return Times
   pmTerm ignoreEOL = (,) <$> (many $ choice [unaryPlus, unaryMinus])
@@ -785,6 +789,23 @@ makeParser (term, tailExpr, prefixed) Multiplication =
 \end{code}
 
 \subsubsection{PatternTest}
+The operator \verb|'?'| (\verb?PatternTest?) is the only non
+associative in \emph{Kalkulu}. The expression \verb|a ? b ? c| is
+illegal.
+\begin{code}
+makeParser (term, tailExpr, prefixed) PatternTest =
+  (term', tailExpr', prefixed)
+  where
+  term' ignoreEOL = do x <- term ignoreEOL
+                       (do y <- tailInfix ignoreEOL
+                           return $ y x) <|> return x
+  tailInfix ignoreEOL = do
+    void $ lexeme (char '?') True
+    y <- term ignoreEOL
+    notFollowedBy (char '?')
+    return $ \x -> Cmp (Builtin B.PatternTest) [x, y]
+  tailExpr' ignoreEOL = tailExpr ignoreEOL <|> tailInfix ignoreEOL
+\end{code}
 
 \subsubsection{Span}
 It is challenging to categorize \verb?;;?. Is it an operator?  A
@@ -1061,7 +1082,7 @@ opTable = [
   part,
   cmp,
   prefix "<<" B.Get,
-  -- PatternTest
+  PatternTest,
   derivative,
   unset,
   postfix "++" B.Increment,
@@ -1096,7 +1117,7 @@ opTable = [
           ("*=", TimesBy), ("/=", DivideBy)],
   postfix "&" B.Function,
   infix' [("^=", UpSet), ("=", Set), (":=", SetDelayed), ("^:=", UpSetDelayed)],
-  infix' [(">>>", PutAppend), (">>>", Put)],
+  infix' [(">>>", PutAppend), (">>", Put)],
   tilde,                        -- check precedence
   infix' [("@", Arobas)],       -- check precedence
   infix' [("//", DoubleSlash)],
