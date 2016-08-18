@@ -248,11 +248,11 @@ natural = many1 digit >>= (return . Number . read)
 Notice that a number begins with a digit or a dot \verb?'.'?, in
 particular it has no sign (\verb?'+'? or \verb?'-'?). Instead,
 \verb?'+'? and \verb?'-'? are unary operators, dealt in
-subsubsection~\textbf{TODO}. Thanks to that, a simple expression is
-(almost) totally distinguishable from an operator by looking at the
-first character\footnote{The only exception is \texttt{Dot}
-  (\texttt{'.'}). We settle this issue by asking the dot operator not
-  to be followed by a digit, see
+subsubsection~\ref{parser:subsub:multiplication}. Thanks to that, a
+simple expression is (almost) totally distinguishable from an
+operator by looking at the first character\footnote{The only
+  exception is \texttt{Dot} (\texttt{'.'}). We settle this issue by
+  asking the dot operator not to be followed by a digit, see
   subsection~\ref{parser:subsec:listops}.}. This property is
 important for fast parsing, because a simple expression can be
 followed by either a simple expression or an operator (an outcome of
@@ -715,20 +715,30 @@ makeParser (term, tailExpr, prefixed) (Prefix op) =
 
 \subsection{Special cases}
 \subsubsection{Compound expressions}
+The operator \verb?';'? (\verb?CompoundExpression?) is a particular
+infix operator: its terms (except the first), can be implicitly
+\verb?Null?. For example, \verb?a; ;b? is parsed
+\verb?CompoundExpression[a, Null, b]?. As such, the expression
+\verb?a;? is perfectly valid. Consequently, \verb?';'? shares some
+properties with postfix operator.
 \begin{code}
 makeParser (term, tailExpr, prefixed) CompoundExpression =
   (term', tailExpr, prefixed)
   where
   term' ignoreEOL = do
-    x <- term ignoreEOL
-    y <- many $ subexpr ignoreEOL
-    return $ if null y then x else Cmp (Builtin B.CompoundExpression) (x:y)
+    x  <- term ignoreEOL
+    ys <- many $ tailExpr' ignoreEOL
+    return $ foldl (flip ($)) x ys
+  tailInfix ignoreEOL = do
+    y <- many1 $ subexpr ignoreEOL
+    return $ \x -> Cmp (Builtin B.CompoundExpression) (x:y)
   subexpr ignoreEOL = lexeme (char ';') ignoreEOL >>
     (term ignoreEOL <|> return (Builtin B.Null))
+  tailExpr' ignoreEOL = tailExpr ignoreEOL <|> tailInfix ignoreEOL
 \end{code}
 
 \subsubsection{Multiplication}
-
+\label{parser:subsub:multiplication}
 This part is rather tricky for many reasons. First, there are four
 operators related to multiplication: two infix operators \verb?'*'?
 and \verb?'/'? (\verb?Times? and \verb?Divide?) and two prefix
@@ -1050,7 +1060,7 @@ below.
 opTable :: [PrecedenceLevel]
 opTable = [
   part,
-  composit,
+  composite,
   Prefix  (lexeme $ try $ string "<<"  >> return (toFunc B.Get)),
   PatternTest,
   derivative,
@@ -1110,10 +1120,10 @@ opTable = [
            lexeme $       string "^:=" >> return UpSetDelayed],
   Infix   [lexeme $ try $ string ">>>" >> return PutAppend,
            lexeme $       string ">>"  >> return Put],
-  tilde,                                                  -- check precedence
-  Infix   [lexeme $       string "@"   >> return Arobas], -- check precedence
+  tilde, -- check precedence of operators below
+  Infix   [lexeme $       string "@"   >> return Arobas],
   Infix   [lexeme $       string "//"  >> return DoubleSlash],
-  CompoundExpression] -- check precedence
+  CompoundExpression]
 \end{code}
 \subsubsection{Composite and Part}
 In expressions like \verb?a[1, 2]? or \verb?a[[1, 2]]?, the bracketed
@@ -1124,17 +1134,17 @@ function \inline{bracketed} of
 subsection~\ref{parser:subsec:bracketed_expressions} will once again
 prove useful.
 \begin{code}
-composite :: PrecedenceLevel
-composite = Postfix $ \ignoreEOL -> do
-  args <- bracketed (void $ char '[')
-                    (lexeme (void $ char ']') ignoreEOL)
-  return (\h -> Cmp h args)
-
 part :: PrecedenceLevel
 part = Postfix $ \ignoreEOL -> do
   args <- bracketed (try $ void $ string "[[")
                     (lexeme (void $ string "]]") ignoreEOL)
   return $ \h -> Cmp (Builtin B.Part) (h:args)
+
+composite :: PrecedenceLevel
+composite = Postfix $ \ignoreEOL -> do
+  args <- bracketed (void $ char '[')
+                    (lexeme (void $ char ']') ignoreEOL)
+  return (\h -> Cmp h args)
 \end{code}
 \subsubsection{Derivative}
 As in mathematics, the derivate of a function \verb?f? is \verb?f'?.
