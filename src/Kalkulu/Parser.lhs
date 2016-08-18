@@ -253,11 +253,11 @@ subsubsection~\textbf{TODO}. Thanks to that, a simple expression is
 first character\footnote{The only exception is \texttt{Dot}
   (\texttt{'.'}). We settle this issue by asking the dot operator not
   to be followed by a digit, see
-  section~\ref{parser:sec:listops}.}. This property is important for
-fast parsing, because a simple expression can be followed by either a
-simple expression or an operator (an outcome of implicit
-multiplication). Also, unary operator \verb?'-'?  is smart enough to
-parse \verb?-2? as an atom rather than \verb?Times[-1, 2]?.
+  subsection~\ref{parser:subsec:listops}.}. This property is
+important for fast parsing, because a simple expression can be
+followed by either a simple expression or an operator (an outcome of
+implicit multiplication). Also, unary operator \verb?'-'?  is smart
+enough to parse \verb?-2? as an atom rather than \verb?Times[-1, 2]?.
 
 \subsection{Strings}
 A \verb?String? is enclosed by quotes \verb?'\"'?. The escape
@@ -418,6 +418,7 @@ out = char '%' >> (
              _ -> Cmp (Builtin B.Out) [Number (-i-1)]))              -- SE6b
 \end{code}
 \subsection{Bracketed expressions}
+\label{parser:subsec:bracketed_expressions}
 The following parses parenthesized expressions (type (SE7)). A
 general pattern is that when we deal with delimited expressions, the
 opening token (here \verb?'('?)  has to be lexemized. Spaces
@@ -660,7 +661,7 @@ enhanced parser, able to parse operators from the precedence level.
 makeParser :: TrioParser -> PrecedenceLevel -> TrioParser
 \end{spec}
 The table of operators \inline{opTable :: [PrecedenceLevel]}
-(documented in section~\ref{parser:sec:listops}) contains all
+(documented in subsection~\ref{parser:subsec:listops}) contains all
 operators in order of decreasing precedence.
 
 The final parser \inline{expr} is built by making repeated use of
@@ -690,7 +691,7 @@ makeParser (term, tailExpr, prefixed) (Infix ops) =
     xs <- many1 $ (,) <$> infixOp <*> (term ignoreEOL<|> anyPrefixed ignoreEOL)
     return $ \x -> makeExpression x xs
   tailExpr' ignoreEOL = tailExpr ignoreEOL <|> tailInfix ignoreEOL
-  infixOp = choice [try (op True) | op <- ops] -- try to remove try
+  infixOp = choice [op True | op <- ops]
 \end{code}
 
 \begin{code}
@@ -755,23 +756,28 @@ The function \inline{factors} allows to transform a \inline{pmTerm}
 into a series of factors.
 \begin{code}
 makeParser (term, tailExpr, prefixed) Multiplication =
-  (term', tailExpr', prefixed)
+  (term', tailExpr', prefixed')
   where
   unaryPlus  = try (lexeme (char '+' >> notFollowedBy (char '+')) True
                     >> return UPlus)
   unaryMinus = try (lexeme (char '-' >> notFollowedBy (char '-')) True
                     >> return UMinus)
-  divide = try (lexeme (char '/' >> notFollowedBy (oneOf "/.")) True
+  divide = try (lexeme (char '/' >> notFollowedBy (oneOf "/.;=")) True
                 >> return Divide)
-  times  = ((void $ lexeme (char '*') True) <|> (notFollowedBy $ oneOf "+-"))
-            >> return Times
+  times  = try $ (lexeme (char '*' >> notFollowedBy (char '=')) True
+                   <|> (notFollowedBy $ oneOf "+-")) >> return Times
   pmTerm ignoreEOL = (,) <$> (many $ choice [unaryPlus, unaryMinus])
-                         <*> term ignoreEOL
+                         <*> (term ignoreEOL <|> anyPrefixed ignoreEOL)
+  newPrefixed ignoreEOL = do
+    pms <- (many1 $ choice [unaryPlus, unaryMinus])
+    e <- (term ignoreEOL <|> anyPrefixed ignoreEOL)
+    return $ addTimes $ factors (pms, e)
+  prefixed' ignoreEOL = prefixed ignoreEOL <|> newPrefixed ignoreEOL
   infixOp = divide <|> times
   term' ignoreEOL = do x <- pmTerm ignoreEOL
                        (do y <- tailInfix ignoreEOL
                            return $ addTimes $ (factors x)++(tailFactors y))
-                         <|> return (addTimes (factors x))
+                           <|> return (addTimes (factors x))
   tailInfix ignoreEOL = many1 $ (,) <$> infixOp <*> pmTerm ignoreEOL
   factors ([], x) = [x]
   factors ([UMinus], Number x) = [Number (-x)]
@@ -1029,34 +1035,97 @@ instance InfixOp Inequality where
           toExpr GreaterEqual = Builtin B.GreaterEqual
           toExpr LessEqual    = Builtin B.LessEqual
 \end{code}
-
+\section{Operators}
+Most unary operators are related to a builtin symbol. We need a function
+\inline{toFunc} which realizes the conversion from a symbol to a function.
 \begin{code}
-prefix :: String -> B.BuiltinSymbol -> PrecedenceLevel
-prefix opName symb = Prefix (\ignoreEOL ->
-                               lexeme (string opName) ignoreEOL >>
-                               return (\h -> Cmp (Builtin symb) [h]))
-
-postfix :: String -> B.BuiltinSymbol -> PrecedenceLevel
-postfix opName symb = Postfix (\ignoreEOL ->
-                                 lexeme (try $ string opName) ignoreEOL >>
-                                 return (\h -> Cmp (Builtin symb) [h]))
-
-unset :: PrecedenceLevel
-unset = Postfix (\ignoreEOL ->
-  lexeme (try (lexeme (char '=') True >> char '.')) ignoreEOL >>
-  return (\h -> Cmp (Builtin B.Unset) [h]))
-
-infix' :: InfixOp a => [(String, a)] -> PrecedenceLevel
-infix' xs = Infix [lexeme (string opName >> return op) | (opName, op) <- xs]
-
-tilde :: PrecedenceLevel
-tilde = Infix [\ignoreEOL -> do void $ lexeme (char '~') True
-                                s <- lexeme identifier True
-                                void $ lexeme (char '~') ignoreEOL
-                                return $ Tilde s]
-
-cmp :: PrecedenceLevel
-cmp = Postfix $ \ignoreEOL -> do
+toFunc :: B.BuiltinSymbol -> Expr -> Expr
+toFunc b e = Cmp (Builtin b) [e]
+\end{code}
+\subsubsection{List of operators}
+\label{parser:subsec:listops}
+Finally, we give the operator table. Some operators are explained
+below.
+\begin{code}
+opTable :: [PrecedenceLevel]
+opTable = [
+  part,
+  composit,
+  Prefix  (lexeme $ try $ string "<<"  >> return (toFunc B.Get)),
+  PatternTest,
+  derivative,
+  Postfix (lexeme $ try $ (lexeme (char '=') True) >> char '.'
+                                       >> return (toFunc B.Unset)),
+  Postfix (lexeme $ try $ string "++"  >> return (toFunc B.Increment)),
+  Postfix (lexeme $ try $ string "--"  >> return (toFunc B.Decrement)),
+  Prefix  (lexeme $ try $ string "++"  >> return (toFunc B.PreIncrement)),
+  Prefix  (lexeme $ try $ string "--"  >> return (toFunc B.PreDecrement)),
+  Infix   [lexeme $ try $ string "@*"  >> return Composition],
+  Infix   [lexeme $ try $ string "@@"  >> return Apply,
+           lexeme $ try $ string "/@"  >> return Map,
+           lexeme $ try $ string "//@" >> return MapAll],
+  Postfix (lexeme $ try $ string "!!"  >> return (toFunc B.Factorial2)),
+  Postfix (lexeme $       char   '!'   >> return (toFunc B.Factorial)),
+  Infix   [lexeme $ try $ string "<>"  >> return StringJoin],
+  Infix   [lexeme $ try $ char   '^'   >> notFollowedBy (oneOf ":=")
+                                       >> return Power],
+  Infix   [lexeme $ try $ string "**"  >> return NonCommutativeMultiply],
+  Infix   [lexeme $ try $ char   '.'   >> notFollowedBy (digit <|> char '.')
+                                       >> return Dot],
+  Multiplication,
+  Infix   [lexeme $ try $ char   '+'   >> notFollowedBy (char '=')
+                                       >> return Plus,
+           lexeme $ try $ char   '-'   >> notFollowedBy (oneOf ">=")
+                                       >> return Minus],
+  -- Span,
+  Infix   [lexeme $ try $ string "===" >> return SameQ,
+           lexeme $ try $ string "=!=" >> return UnsameQ],
+  Infix   [lexeme $ try $ string "=="  >> return Equal,
+           lexeme $ try $ string "=!"  >> return Unequal,
+           lexeme $ try $ string ">="  >> return GreaterEqual,
+           lexeme $ try $ string "<="  >> return LessEqual,
+           lexeme $ try $ string ">"   >> notFollowedBy (char '>')
+                                       >> return Greater,
+           lexeme $       string "<"   >> return Less],
+  Prefix  (lexeme $       char   '!'   >> return (toFunc B.Not)),
+  Infix   [lexeme $ try $ string "&&"  >> return And],
+  Infix   [lexeme $ try $ string "||"  >> return Or],
+  Postfix (lexeme $ try $ string "..." >> return (toFunc B.RepeatedNull)),
+  Postfix (lexeme $ try $ string ".."  >> return (toFunc B.Repeated)),
+  Infix   [lexeme $       char   '|'   >> return Alternative],
+  Infix   [lexeme $ try $ string "~~"  >> return StringExpression],
+  Infix   [lexeme $ try $ string "/;"  >> return Condition],
+  Infix   [lexeme $ try $ string "->"  >> return Rule,
+           lexeme $ try $ string ":>"  >> return RuleDelayed],
+  Infix   [lexeme $ try $ string "/."  >> return ReplaceAll,
+           lexeme $ try $ string "//." >> return ReplaceRepeated],
+  Infix   [lexeme $       string "+="  >> return AddTo,
+           lexeme $       string "-="  >> return SubtractFrom,
+           lexeme $       string "*="  >> return TimesBy,
+           lexeme $ try $ string "/="  >> return DivideBy],
+  Postfix (lexeme $       char   '&'   >> return (toFunc B.Function)),
+  Infix   [lexeme $ try $ string "^="  >> return UpSet,
+           lexeme $       char   '='   >> return Set,
+           lexeme $       string ":= " >> return SetDelayed,
+           lexeme $       string "^:=" >> return UpSetDelayed],
+  Infix   [lexeme $ try $ string ">>>" >> return PutAppend,
+           lexeme $       string ">>"  >> return Put],
+  tilde,                                                  -- check precedence
+  Infix   [lexeme $       string "@"   >> return Arobas], -- check precedence
+  Infix   [lexeme $       string "//"  >> return DoubleSlash],
+  CompoundExpression] -- check precedence
+\end{code}
+\subsubsection{Composite and Part}
+In expressions like \verb?a[1, 2]? or \verb?a[[1, 2]]?, the bracketed
+parts are treated as postfix operators. This shows that a postfix
+operator can be arbitrarily long, so one has to be careful not to
+employ the \inline{try} combinator in front of a general postfix. The
+function \inline{bracketed} of
+subsection~\ref{parser:subsec:bracketed_expressions} will once again
+prove useful.
+\begin{code}
+composite :: PrecedenceLevel
+composite = Postfix $ \ignoreEOL -> do
   args <- bracketed (void $ char '[')
                     (lexeme (void $ char ']') ignoreEOL)
   return (\h -> Cmp h args)
@@ -1066,61 +1135,27 @@ part = Postfix $ \ignoreEOL -> do
   args <- bracketed (try $ void $ string "[[")
                     (lexeme (void $ string "]]") ignoreEOL)
   return $ \h -> Cmp (Builtin B.Part) (h:args)
-
+\end{code}
+\subsubsection{Derivative}
+As in mathematics, the derivate of a function \verb?f? is \verb?f'?.
+It is possible to derivate as many times as wanted (\verb?f'''?,
+parsed as \verb?Derivate[3][f]?), giving birth to an infinite family
+of postfix operators.
+\begin{code}
 derivative :: PrecedenceLevel
 derivative = Postfix $ \ignoreEOL -> do
   n <- toInteger . length <$> (many1 $ (lexeme (char '\'') ignoreEOL))
   return $  \x -> Cmp (Cmp (Builtin B.Derivative) [Number n]) [x]
-
-
 \end{code}
-\section{List of operators}
-\label{parser:sec:listops}
+\subsubsection{Tilde}
+Any symbol \verb?f? can be turned as a flat infix operator by
+surrounding it with \verb?'~'?. In this case, \verb?~f~? as a whole
+is considered as an operator.
 \begin{code}
-opTable :: [PrecedenceLevel]
-opTable = [
-  part,
-  cmp,
-  prefix "<<" B.Get,
-  PatternTest,
-  derivative,
-  unset,
-  postfix "++" B.Increment,
-  postfix "--" B.Decrement,
-  prefix "++" B.PreIncrement,
-  prefix "--" B.PreDecrement,
-  infix' [("@*", Composition)],
-  infix' [("@@", Apply), ("/@", Map), ("//@", MapAll)],
-  postfix "!!" B.Factorial2,
-  postfix "!" B.Factorial,
-  infix' [("<>", StringJoin)],
-  infix' [("^", Power)],
-  infix' [("**", NonCommutativeMultiply)],
-  Infix [lexeme (char '.' >> notFollowedBy digit >> return Dot)],
-  Multiplication,
-  infix' [("+", Plus), ("-", Minus)],
-  -- Span,
-  infix' [("===", SameQ), ("=!=", UnsameQ)],
-  infix' [("==", Equal), ("=!", Unequal), (">=", GreaterEqual),
-          ("<=", LessEqual), (">", Greater), ("<", Less)],
-  prefix "!" B.Not,
-  infix' [("&&", And)],
-  infix' [("||", Or)],
-  postfix "..." B.RepeatedNull,
-  postfix ".." B.Repeated,
-  infix' [("|", Alternative)],
-  infix' [("~~", StringExpression)],
-  infix' [("/;", Condition)],
-  infix' [("->", Rule), (":>", RuleDelayed)],
-  infix' [("/.", ReplaceAll), ("//.", ReplaceRepeated)],
-  infix' [("+=", AddTo), ("-=", SubtractFrom),
-          ("*=", TimesBy), ("/=", DivideBy)],
-  postfix "&" B.Function,
-  infix' [("^=", UpSet), ("=", Set), (":=", SetDelayed), ("^:=", UpSetDelayed)],
-  infix' [(">>>", PutAppend), (">>", Put)],
-  tilde,                        -- check precedence
-  infix' [("@", Arobas)],       -- check precedence
-  infix' [("//", DoubleSlash)],
-  CompoundExpression] -- check precedence
+tilde :: PrecedenceLevel
+tilde = Infix [\ignoreEOL -> do void $ lexeme (char '~') True
+                                s <- lexeme identifier True
+                                void $ lexeme (char '~') ignoreEOL
+                                return $ Tilde s]
 \end{code}
 \end{document}
