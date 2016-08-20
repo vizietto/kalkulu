@@ -1,11 +1,12 @@
 \documentclass[main.tex]{subfiles}
-\def\hideFromLaTeX#{}
+\newcommand\hideFromLaTeX[1]{}
 
 \begin{document}
 \chapter{Parsing}
 The chapter describes the module \verb?Kalkulu.Parser?, whose
 header is
 \begin{code}
+{-# LANGUAGE ExistentialQuantification #-}
 module Kalkulu.Parser where
 
 import Control.Monad
@@ -419,14 +420,13 @@ out = char '%' >> (
 \end{code}
 \subsection{Bracketed expressions}
 \label{parser:subsec:bracketed_expressions}
-The following parses parenthesized expressions (type (SE7)). A
-general pattern is that when we deal with delimited expressions, the
-opening token (here \verb?'('?)  has to be lexemized. Spaces
-(including end of lines) are ignored \emph{before}, \emph{inside} and
-\emph{after} the parenthesized expression (\inline{expr True} is
-already lexemized, see subsection~\ref{parser:sub:algorithm}, it
-would be redundant to replace it with \inline{lexeme (expr True)
- True}).
+The following parses parenthesized expressions (type (SE7)). A general
+pattern is that when we deal with delimited expressions, the opening
+token (here \verb?'('?)  has to be lexemized. Spaces (including end of
+lines) are ignored \emph{before}, \emph{inside} and \emph{after} the
+parenthesized expression. Note that \inline{expr True} is already
+lexemized, see subsection~\ref{parser:sub:algorithm}, it would be
+redundant to replace it with \inline{lexeme (expr True) True}).
 \begin{code}
 parenthesizedExpr :: Parser Expr
 parenthesizedExpr = between (lexeme (char '(') True) (char ')') (expr True)
@@ -636,6 +636,7 @@ data PrecedenceLevel =
   | CompoundExpression
   | Multiplication
   | PatternTest
+  | Span
 \end{code}
 As opposed to unary operators, several infix operators can share the
 same precedence.  The typeclass \inline{InfixOp} determines how the
@@ -716,9 +717,9 @@ makeParser (term, tailExpr, prefixed) (Prefix op) =
 \subsection{Special cases}
 \subsubsection{Compound expressions}
 The operator \verb?';'? (\verb?CompoundExpression?) is a particular
-infix operator: its terms (except the first), can be implicitly
-\verb?Null?. For example, \verb?a; ;b? is parsed
-\verb?CompoundExpression[a, Null, b]?. As such, the expression
+infix operator: its terms (except the first one), can be implicitly
+\verb?Null?. For example, the expression \verb?a; ;b? is parsed
+into \verb?CompoundExpression[a, Null, b]?. As such, the expression
 \verb?a;? is perfectly valid. Consequently, \verb?';'? shares some
 properties with postfix operator.
 \begin{code}
@@ -863,6 +864,7 @@ regroup themselves in a \verb?Times?. This is something the
 following snippet has to do manually.
 \begin{code}
 -- TODO!
+makeParser parser Span = parser
 \end{code}
 
 \subsection{Associativity}
@@ -944,8 +946,7 @@ an instance of \inline{InfixOp}.
 \begin{code}
 instance InfixOp InfixR where
   makeExpression x [] = x
-  makeExpression x ((DoubleSlash,x'):xs) =
-    makeExpression (Cmp x' [x]) xs
+  makeExpression x ((DoubleSlash,x'):xs) = makeExpression (Cmp x' [x]) xs
   makeExpression x ((op,x'):xs) =
     Cmp (Builtin $ toSymbol op) [x, makeExpression x' xs]
     where
@@ -1065,6 +1066,7 @@ opTable = [
   PatternTest,
   derivative,
   Postfix (lexeme $ try $ (lexeme (char '=') True) >> char '.'
+                                       >> notFollowedBy digit
                                        >> return (toFunc B.Unset)),
   Postfix (lexeme $ try $ string "++"  >> return (toFunc B.Increment)),
   Postfix (lexeme $ try $ string "--"  >> return (toFunc B.Decrement)),
@@ -1075,7 +1077,8 @@ opTable = [
            lexeme $ try $ string "/@"  >> return Map,
            lexeme $ try $ string "//@" >> return MapAll],
   Postfix (lexeme $ try $ string "!!"  >> return (toFunc B.Factorial2)),
-  Postfix (lexeme $       char   '!'   >> return (toFunc B.Factorial)),
+  Postfix (lexeme $ try $ char   '!'   >> notFollowedBy (char '=')
+                                       >> return (toFunc B.Factorial)),
   Infix   [lexeme $ try $ string "<>"  >> return StringJoin],
   Infix   [lexeme $ try $ char   '^'   >> notFollowedBy (oneOf ":=")
                                        >> return Power],
@@ -1087,17 +1090,18 @@ opTable = [
                                        >> return Plus,
            lexeme $ try $ char   '-'   >> notFollowedBy (oneOf ">=")
                                        >> return Minus],
-  -- Span,
+  Span,
   Infix   [lexeme $ try $ string "===" >> return SameQ,
            lexeme $ try $ string "=!=" >> return UnsameQ],
   Infix   [lexeme $ try $ string "=="  >> return Equal,
-           lexeme $ try $ string "=!"  >> return Unequal,
+           lexeme $       string "!="  >> return Unequal,
            lexeme $ try $ string ">="  >> return GreaterEqual,
            lexeme $ try $ string "<="  >> return LessEqual,
            lexeme $ try $ string ">"   >> notFollowedBy (char '>')
                                        >> return Greater,
            lexeme $       string "<"   >> return Less],
-  Prefix  (lexeme $       char   '!'   >> return (toFunc B.Not)),
+  Prefix  (lexeme $ try $ char   '!'   >> notFollowedBy (char '=')
+                                       >> return (toFunc B.Not)),
   Infix   [lexeme $ try $ string "&&"  >> return And],
   Infix   [lexeme $ try $ string "||"  >> return Or],
   Postfix (lexeme $ try $ string "..." >> return (toFunc B.RepeatedNull)),
@@ -1158,7 +1162,7 @@ derivative = Postfix $ \ignoreEOL -> do
   return $  \x -> Cmp (Cmp (Builtin B.Derivative) [Number n]) [x]
 \end{code}
 \subsubsection{Tilde}
-Any symbol \verb?f? can be turned as a flat infix operator by
+Any symbol \verb?f? can be turned into a flat infix operator by
 surrounding it with \verb?'~'?. In this case, \verb?~f~? as a whole
 is considered as an operator.
 \begin{code}
