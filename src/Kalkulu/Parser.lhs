@@ -10,7 +10,7 @@ header is
 module Kalkulu.Parser where
 
 import Control.Monad
-import Data.Char (isSpace)
+import Data.Char hiding (digitToInt)
 import Text.ParserCombinators.Parsec hiding (space)
 
 import qualified Kalkulu.Builtin as B
@@ -185,7 +185,6 @@ data Expr =
   | Symbol               Name
   | Builtin              B.BuiltinSymbol
   | Cmp                  Expr [Expr]
-    deriving Show
 \end{code}
 The \emph{name} field of a \inline{Symbol} contains its name,
 \emph{as it is read}, without further interpretation: it could be
@@ -241,10 +240,60 @@ parsers.
 
 \subsection{Numbers}
 For the moment, only integers are implemented in \emph{Kalkulu}.
-\textbf{TODO:} \verb?base^^digits?, floats, etc.
+The table~\ref{parser:tab:numbers} summarizes the input syntax for
+numbers.
+\begin{table}[!h]
+  \centering
+  \begin{tabular}{|c|c|c|c|}
+    \hline
+           & \textbf{Type} & \textbf{Format} & \textbf{Example}\\\hline
+    (SE1a) & \multirow{2}{*}{Integer} & \verb?digits? & \verb?123?\\
+    (SE1b) && \verb?base^^digits? & \verb?16^^7b? or \verb?16^^7B?\\
+    \hline
+  \end{tabular}
+  \caption{Input syntax for numbers}
+  \label{parser:tab:numbers}
+\end{table}
+
+With the following, we can parse numbers of type (SE1a).
 \begin{code}
 natural :: Parser Expr
 natural = many1 digit >>= (return . Number . read)
+\end{code}
+
+\begin{code}
+se1b :: Parser Expr
+se1b = do
+  base <- try parseBase
+  if base > 36 || base < 2
+    then mzero <?> "base between 2 and 36"
+    else do xs <- many1 (digitAnyBase base)
+            notFollowedBy alphaNum
+            return (digitsToNumber xs base)
+  where parseBase = do
+          a <- digit
+          (string "^^" >> return (read [a])) <|> (do b <- digit
+                                                     _ <- string "^^"
+                                                     return $ read [a, b])
+        digitToInt x | isDigit x      = ord(x) - ord('0')
+                     | isAsciiLower x = ord(x) - ord('a') + 10
+                     | isAsciiUpper x = ord(x) - ord('A') + 10
+                     | otherwise      = error "not a digit"
+        digitAnyBase :: Int -> Parser Int
+        digitAnyBase base = do
+          x <- alphaNum
+          let x' = digitToInt x
+          if x' < base && x' >= 0
+            then return x'
+            else mzero <?> ("digit in base " ++ show base)
+        digitsToNumber xs base =
+          let base' = toInteger base in
+          Number $ foldl (\x y -> base'*x + y) 0 (map toInteger xs)
+\end{code}
+
+\begin{code}
+number :: Parser Expr
+number = se1b <|> natural
 \end{code}
 Notice that a number begins with a digit or a dot \verb?'.'?, in
 particular it has no sign (\verb?'+'? or \verb?'-'?). Instead,
@@ -469,7 +518,7 @@ Thanks to the preceding subsections, we are able to create a parser
 of simple expressions.
 \begin{code}
 simpleExpr :: Parser Expr
-simpleExpr = natural <|> string' <|> blank Nothing
+simpleExpr = number <|> string' <|> blank Nothing
              <|> se4 <|> slot <|> out
              <|> parenthesizedExpr <|> list
 \end{code}
@@ -807,7 +856,7 @@ makeParser (term, tailExpr, prefixed) Multiplication =
 
 \subsubsection{PatternTest}
 The operator \verb|'?'| (\verb?PatternTest?) is the only non
-associative in \emph{Kalkulu}. The expression \verb|a ? b ? c| is
+associative one in \emph{Kalkulu}. The expression \verb|a ? b ? c| is
 illegal.
 \begin{code}
 makeParser (term, tailExpr, prefixed) PatternTest =
