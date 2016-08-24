@@ -48,10 +48,13 @@ instance Show Expression where
 
 \subsection{Pattern synonyms}
 Pattern-matching built-in symbols will become a regular task, thus
-we define a useful pattern synonym.
+we useful pattern synonyms.
 \begin{code}
 pattern SymbolB :: B.BuiltinSymbol -> Expression
 pattern SymbolB symb = Symbol (Builtin symb)
+
+pattern CmpB :: B.BuiltinSymbol -> V.Vector Expression -> Expression
+pattern CmpB h args = Cmp (SymbolB h) args
 \end{code}
 
 \subsection{Canonical order}
@@ -119,17 +122,18 @@ is less than a composite expression (as \verb?y? is greater than
 First, we begin to treat the cases where the first expression to
 compare is a \verb?Power?.
 \begin{code}
-compareExpr (Cmp (SymbolB B.Power) [a, b]) (Cmp (SymbolB B.Power) [c, d]) =
+compareExpr (CmpB B.Power [a, b]) (CmpB B.Power [c, d]) =
   compare a c <> compare b d
 \end{code}
 What happens when we compare a power \verb?Power[a, b]? with an empty
-product? As an empty product evaluates to \verb?1?, it seems logical
-to compare \verb?a? with \verb?1?. In case of a tie, we decrete that
-\verb?Power[1, b]? is greater that \verb?Times[]? (in accordance
+product? As both \verb?Times[]? and \verb?Power[1, 1]? evaluate to
+\verb?1?, we are let to compare again two powers: \verb?Power[a, b]?
+and \verb?Power[1, 1]?. In case of a tie, we decrete that
+\verb?Power[1, 1]? is less than \verb?Times[]? (in accordance
 with the general rule for sorting composite expressions).
 \begin{code}
-compareExpr (Cmp (SymbolB B.Power) [a, _]) (Cmp (SymbolB B.Times) []) =
-  compare a (Number 1) <> GT
+compareExpr (CmpB B.Power [a, b]) (CmpB B.Times []) =
+  compare a (Number 1) <> compare b (Number 1) <> LT
 \end{code}
 To compare a \verb?Power[a,b]? with a product \verb?Times[..., y]?,
 we ought to compare it with each of the factors appearing in
@@ -140,7 +144,7 @@ default \verb?Orderless?, which means that\footnote{unless the
 factor is the last one \verb?y?. For efficiency reason, the power is
 compared with \verb?y? only.
 \begin{code}
-compareExpr e1@(Cmp (SymbolB B.Power) [_, _]) (Cmp (SymbolB B.Times) ys) =
+compareExpr e1@(CmpB B.Power [_, _]) (CmpB B.Times ys) =
   compare e1 (V.last ys) <> LT
 \end{code}
 When we compare \verb?Power[a, b]? with an expression
@@ -148,24 +152,24 @@ When we compare \verb?Power[a, b]? with an expression
 the idea is to treat \verb?e2? as if it were \verb?Power[e2, 1]?,
 to reduce to the case where we compared two \verb?Power?s.
 \begin{code}
-compareExpr (Cmp (SymbolB B.Power) [a, b]) e2 =
-  compare a e2 <> compare b (Number 1) <> GT
+compareExpr (CmpB B.Power [a, b]) e2 =
+  compare a e2 <> compare b (Number 1) <> GT -- GT correct?
 \end{code}
 Next we treat the symmetrical cases where the second expression is a
 \verb?Power?.
 \begin{code}
-compareExpr (Cmp (SymbolB B.Times) []) (Cmp (SymbolB B.Power) [a, _]) =
-  compare (Number 1) a <> LT
-compareExpr (Cmp (SymbolB B.Times) xs) e2@(Cmp (SymbolB B.Power) [_, _]) =
+compareExpr (CmpB B.Times []) (CmpB B.Power [a, b]) =
+  compare (Number 1) a <> compare (Number 1) b <> GT
+compareExpr (CmpB B.Times xs) e2@(CmpB B.Power [_, _]) =
   compare (V.last xs) e2 <> GT
-compareExpr e1 (Cmp (SymbolB B.Power) [c, d]) =
+compareExpr e1 (CmpB B.Power [c, d]) =
   compare e1 c <> compare (Number 1) d <> LT
 \end{code}
 To compare two products, we compare their greatest factors, which
 should be at the end of the argument lists (because \texttt{Times} is
 \texttt{Orderless}).
 \begin{code}
-compareExpr (Cmp (SymbolB B.Times) args1) (Cmp (SymbolB B.Times) args2) =
+compareExpr (CmpB B.Times args1) (CmpB B.Times args2) =
   foldr (<>) EQ (V.map compareArg factors)
   <> compare (length args1) (length args2)
   where factors = V.zip (V.reverse args1) (V.reverse args2)
@@ -174,18 +178,18 @@ compareExpr (Cmp (SymbolB B.Times) args1) (Cmp (SymbolB B.Times) args2) =
 The expression \verb?Times[]? evaluates to \verb?1?. This motivates
 the following choice:
 \begin{code}
-compareExpr (Cmp (SymbolB B.Times) []) y =
+compareExpr (CmpB B.Times []) y =
   compare (Number 1) y <> GT
-compareExpr x (Cmp (SymbolB B.Times) []) =
+compareExpr x (CmpB B.Times []) =
   compare x (Number 1) <> LT
 \end{code}
 When we compare a non void product \verb?Times[..., x]? with a
 (non product) expression \verb?y?, we compare the last (and
 supposedly greatest) factor \verb?x? with \verb?y?.
 \begin{code}
-compareExpr (Cmp (SymbolB B.Times) xs) y =
+compareExpr (CmpB B.Times xs) y =
   compare (V.last xs) y <> GT
-compareExpr x (Cmp (SymbolB B.Times) ys) =
+compareExpr x (CmpB B.Times ys) =
   -- symmetric case
   compare x (V.last ys) <> LT
 \end{code}
