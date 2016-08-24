@@ -88,7 +88,7 @@ we want to sort the following expressions
 \end{equation}
 We rewrite each of them in exponent form:
 $(\verb?y?,\verb?x?)^{(e_1,e_2)} = \verb?y?^{e_1} \verb?x?^{e_2}$, and
-sort the exponent in the lexicographic order.
+sort the exponents in the lexicographic order.
 \[
   (0,0) < (0,1) < (0,2) < (0, y) < (1,0) < (1,1) < (2,0)
 \]
@@ -107,8 +107,15 @@ compare is a \verb?Power?.
 \begin{code}
 compareExpr (Cmp (SymbolB B.Power) [a, b]) (Cmp (SymbolB B.Power) [c, d]) =
   compare a c <> compare b d
-compareExpr (Cmp (SymbolB B.Power) [_, _])
-            (Cmp (SymbolB B.Times) []) = GT
+\end{code}
+What happens when we compare a power \verb?Power[a, b]? with an empty
+product? As an empty product evaluates to \verb?1?, it seems logical
+to compare \verb?a? with \verb?1?. In case of a tie, we decrete that
+\verb?Power[1, b]? is greater that \verb?Times[]? (in accordance
+with the general rule for sorting composite expressions).
+\begin{code}
+compareExpr (Cmp (SymbolB B.Power) [a, _]) (Cmp (SymbolB B.Times) []) =
+  compare a (Number 1) <> GT
 \end{code}
 To compare a \verb?Power[a,b]? with a product \verb?Times[..., y]?,
 we ought to compare it with each of the factors appearing in
@@ -119,8 +126,7 @@ default \verb?Orderless?, which means that\footnote{unless the
 factor is the last one \verb?y?. For efficiency reason, the power is
 compared with \verb?y? only.
 \begin{code}
-compareExpr e1@(Cmp (SymbolB B.Power) [_, _])
-            (Cmp (SymbolB B.Times) ys) =
+compareExpr e1@(Cmp (SymbolB B.Power) [_, _]) (Cmp (SymbolB B.Times) ys) =
   compare e1 (V.last ys) <> LT
 \end{code}
 When we compare \verb?Power[a, b]? with an expression
@@ -134,10 +140,9 @@ compareExpr (Cmp (SymbolB B.Power) [a, b]) e2 =
 Next we treat the symmetrical cases where the second expression is a
 \verb?Power?.
 \begin{code}
-compareExpr (Cmp (SymbolB B.Times) [])
-            (Cmp (SymbolB B.Power) [_, _])    = LT
-compareExpr (Cmp (SymbolB B.Times) xs)
-            e2@(Cmp (SymbolB B.Power) [_, _]) =
+compareExpr (Cmp (SymbolB B.Times) []) (Cmp (SymbolB B.Power) [a, _]) =
+  compare (Number 1) a <> LT
+compareExpr (Cmp (SymbolB B.Times) xs) e2@(Cmp (SymbolB B.Power) [_, _]) =
   compare (V.last xs) e2 <> GT
 compareExpr e1 (Cmp (SymbolB B.Power) [c, d]) =
   compare e1 c <> compare (Number 1) d <> LT
