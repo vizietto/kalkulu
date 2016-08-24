@@ -11,6 +11,7 @@ header is
 module Kalkulu.Expression where
 
 import Data.Monoid ((<>))
+import Data.List (intercalate)
 import qualified Data.Vector as V
 
 import qualified Kalkulu.Builtin as B
@@ -30,6 +31,19 @@ data Expression =
   | Symbol Symbol
   | Cmp Expression (V.Vector Expression)
   deriving (Eq)
+\end{code}
+Next we make \inline{Expression} an instance of the \inline{Show}
+typeclass. This is not strictly necessary, as the burden of printing
+expressions is let to the front-end. But there is currently no
+front-end...
+\begin{code}
+instance Show Expression where
+  show (Number x) = show x
+  show (String x) = show x
+  show (Symbol (Builtin x)) = "System`" ++ show x
+  show (Symbol (UserSymbol _ x y)) = y ++ x
+  show (Cmp h args) = show h ++ "[" ++
+    (intercalate ", " $ V.toList (V.map show args)) ++ "]"
 \end{code}
 
 \subsection{Pattern synonyms}
