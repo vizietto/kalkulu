@@ -24,7 +24,8 @@ executable kalkulu
     base >=4.8 && <4.9,
     haskeline,
     mtl,
-    parsec
+    parsec,
+    vector
   hs-source-dirs:      src
   default-language:    Haskell2010
   ghc-options:         -Wall

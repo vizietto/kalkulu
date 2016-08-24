@@ -1,5 +1,4 @@
 \documentclass[main.tex]{subfiles}
-\newcommand\hideFromLaTeX[1]{}
 
 \begin{document}
 \chapter{Parsing}
@@ -260,7 +259,10 @@ With the following, we can parse numbers of type (SE1a).
 natural :: Parser Expr
 natural = many1 digit >>= (return . Number . read)
 \end{code}
-
+The following allows to parse integers in any base between $2$ and
+$36$. Note that \verb?10^^2a? provokes a parser failure, because
+\verb?a? is not a decimal digit. However, when no base is specified,
+\verb?2a? is parsed into \verb?Times[2, a]?.
 \begin{code}
 se1b :: Parser Expr
 se1b = do
@@ -278,10 +280,10 @@ se1b = do
         digitToInt x | isDigit x      = ord(x) - ord('0')
                      | isAsciiLower x = ord(x) - ord('a') + 10
                      | isAsciiUpper x = ord(x) - ord('A') + 10
-                     | otherwise      = error "not a digit"
+                     | otherwise      = error "unreachable"
         digitAnyBase :: Int -> Parser Int
         digitAnyBase base = do
-          x <- alphaNum
+          x <- oneOf (['0'..'9'] ++ ['a'..'z'] ++ ['A'..'Z'])
           let x' = digitToInt x
           if x' < base && x' >= 0
             then return x'
