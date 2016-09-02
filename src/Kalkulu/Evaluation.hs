@@ -46,9 +46,8 @@ data Definition = Definition {
   , ownvalue   :: Maybe Expression
   , owncode    :: Maybe (Kernel Expression)
   , upcode     :: Maybe (Expression -> Kernel Expression)
-  , subcode    :: Maybe (V.Vector Expression -> V.Vector Expression
-                                             -> Kernel Expression)
-  ,  downcode   :: Maybe (V.Vector Expression -> Kernel Expression)
+  , subcode    :: Maybe (Expression -> Kernel Expression)
+  , downcode   :: Maybe (V.Vector Expression -> Kernel Expression)
   }
 
 data Environment = Environment {
@@ -76,37 +75,27 @@ next before after = after >>= reEval
   where reEval e = if e == before then return e else eval e
 
 eval :: Expression -> Kernel Expression
-eval e@(Cmp hd@(Cmp _ _) args) = do
+eval (Cmp hd@(Cmp _ _) args) = do
   hd' <- eval hd
   e' <- (Cmp hd') <$> (V.mapM eval args)
-  case hd' of
-    Cmp (Symbol x) args' -> do
-      def <- getDef x
-      case (subcode def) of
-        Nothing   -> return e'
-        Just code -> next e' $ code args' args
-    Cmp _ _ -> return e'
-    _       -> eval (Cmp hd' args)
-
-eval e@(Cmp hd@(Symbol x) args) = do
+  if hd /= hd'
+    then eval e'
+    else next e' $ (applySubValue ===> applySubcode) e'
+eval (Cmp hd@(Symbol x) args) = do
   hd' <- eval hd
   if hd /= hd'
     then eval (Cmp hd' args)
-    else undefined
+    else do e' <- (Cmp hd') <$> (evalArgs x args)
+            next e' $ applyRules e'
 
 eval (Cmp hd args) = Cmp <$> (eval hd) <*> (V.mapM eval args)
 
-eval e@(Symbol x) = do
-  def <- getDef x
-  case (owncode def) of
-    Nothing   -> return e
-    Just code -> next e $ code
+eval e@(Symbol _) = next e $ (applyOwnValue ===> applyOwncode) e
 
 eval e = return e
 
--- evaluates arguments
-evalArgs1 :: Symbol -> V.Vector Expression -> Kernel (V.Vector Expression)
-evalArgs1 x args = do
+evalArgs :: Symbol -> V.Vector Expression -> Kernel (V.Vector Expression)
+evalArgs x args = do
   hasHoldAll   <- x `hasAttribute` HoldAll
   hasHoldFirst <- x `hasAttribute` HoldFirst
   hasHoldRest  <- x `hasAttribute` HoldRest
@@ -114,6 +103,7 @@ evalArgs1 x args = do
     (True, _, _) -> return args
     (_, True, _) -> evalFirst args
     (_, _, True) -> evalRest  args
+    _            -> evalAll   args
   where
     evalFirst [] = return V.empty
     evalFirst es = V.cons <$> (eval $ V.head es)
@@ -121,10 +111,11 @@ evalArgs1 x args = do
     evalRest []  = return V.empty
     evalRest es  = V.cons <$> (pure $ V.head es)
                           <*> (V.mapM eval $ V.tail es)
+    evalAll      = V.mapM eval
 
 -- flattens
-evalArgs2 :: Symbol -> V.Vector Expression -> Kernel (V.Vector Expression)
-evalArgs2 x args = do
+flattenArgs :: Symbol -> V.Vector Expression -> Kernel (V.Vector Expression)
+flattenArgs x args = do
   hs <- forbiddenHeads
   return $ V.concatMap (flatten hs) args
   where forbiddenHeads = do
@@ -137,13 +128,12 @@ evalArgs2 x args = do
             (False, True)  -> [Builtin B.Sequence, x]
             (False, False) -> [Builtin B.Sequence]
         flatten :: [Symbol] -> Expression -> V.Vector Expression
-        flatten forbidden e@(Cmp (Symbol x) es)
-          | x `elem` forbidden = es
-          | otherwise          = V.singleton e
+        flatten forbidden (Cmp (Symbol s) es) | s `elem` forbidden = es
+        flatten _ e = V.singleton e
 
 -- See if head can be threaded over lists
-evalArgs3 :: Symbol -> V.Vector Expression -> Kernel (V.Vector Expression)
-evalArgs3 x args = do
+threadLists :: Symbol -> V.Vector Expression -> Kernel (V.Vector Expression)
+threadLists x args = do
   hasListable <- x `hasAttribute` Listable
   if hasListable
     then do
@@ -163,17 +153,77 @@ evalArgs3 x args = do
     applyHead = Cmp (Symbol x)
     tranpose = undefined
 
-evalArgs4 :: Symbol -> V.Vector Expression -> Kernel (V.Vector Expression)
-evalArgs4 x args = do
+sortArgs :: Symbol -> V.Vector Expression -> Kernel (V.Vector Expression)
+sortArgs x args = do
   hasOrderless <- x `hasAttribute` Orderless
   if hasOrderless
     then return $ sortVector args
     else return args
   where sortVector = V.fromList . sort . V.toList
 
-evalArgs :: Symbol -> V.Vector Expression -> Kernel (V.Vector Expression)
-evalArgs x =
-  (evalArgs1 x) >=> (evalArgs2 x) >=> (evalArgs3 x) >=> (evalArgs4 x)
+processArgs :: Symbol -> V.Vector Expression -> Kernel (V.Vector Expression)
+processArgs x =
+  (evalArgs x) >=> (flattenArgs x) >=> (threadLists x) >=> (sortArgs x)
+
+
+-- apply builtin code, first try upcode, then downcode
+applyBuiltinRules :: Expression -> Kernel Expression
+applyBuiltinRules = applyUpcode ===> applyDowncode
+
+(===>) :: (Expression -> Kernel Expression) -> (Expression -> Kernel Expression) -> (Expression -> Kernel Expression)
+(f ===> g) e = do
+  e' <- f e
+  if e == e' then g e else return e'
+
+applyUserRules :: Expression -> Kernel Expression
+applyUserRules = return . id -- TODO: modify
+
+applyRules :: Expression -> Kernel Expression
+applyRules = applyUserRules ===> applyBuiltinRules
+
+applyDowncode :: Expression -> Kernel Expression
+applyDowncode e@(Cmp (Symbol x) args) = do
+  code <- getDowncode x
+  case code of
+    Nothing -> return e
+    Just f  -> next e $ f args
+  where getDowncode symb = getDef symb >>= return . downcode
+applyDowncode _ = error "unreachable"
+
+applyUpcode :: Expression -> Kernel Expression
+applyUpcode e@(Cmp _ []) = return e
+applyUpcode e@(Cmp _ args) = do
+  upcodes <- V.mapM (getUpcode . superHead) args
+  foldl1 (===>) upcodes $ e
+  where getUpcode (Symbol s) = do
+          def <- getDef s
+          return $ case (upcode def) of
+            Nothing -> return . id
+            Just f  -> f
+        getUpcode _ = return (return . id)
+applyUpcode _ = error "unreachable"
+
+applySubValue :: Expression -> Kernel Expression
+applySubValue = return . id -- TODO
+
+applySubcode :: Expression -> Kernel Expression
+applySubcode e = case (superHead e) of
+  Symbol s -> do def <- getDef s
+                 case (subcode def) of
+                   Nothing -> return e
+                   Just f  -> f e
+  _        -> return e
+
+applyOwnValue :: Expression -> Kernel Expression
+applyOwnValue = return . id -- TODO
+
+applyOwncode :: Expression -> Kernel Expression
+applyOwncode e@(Symbol s) = do
+  def <- getDef s
+  case (owncode def) of
+    Nothing -> return e
+    Just f  -> f
+applyOwncode _ = error "unreachable"
 
 sendWarning :: a
 sendWarning = undefined
