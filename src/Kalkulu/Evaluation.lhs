@@ -2,7 +2,7 @@
 
 \begin{document}
 
-\chapter{Evaluate}
+\chapter{Monadic evaluation}
 
 This chapter describes the module \inline{Kalkulu.Evaluation}, whose
 header is
@@ -80,36 +80,71 @@ x `hasAttribute` att = do
   def <- getDef x
   atts <- lift $ readIORef (attributes def)
   return $ att `elem` atts
+\end{code}
 
+\section{Evaluation}
+
+In \emph{Kalkulu}, \emph{evaluation} is the transformation of
+expressions by applying \emph{rules}. We will present the
+evaluation procedure on the fly with great detail. First
+we start with some basic principles:
+\begin{itemize}
+\item The evaluation process ends when no more rule can modify an
+  expression.
+\item Builtin rules are applied after user rules: this allows the
+  user to redefine the system.
+\item In a composite expression, the head is evaluated first.
+\end{itemize}
+
+First, we need some functions to control the evaluation flow. The
+following function \inline{(==>)} combines two evaluation
+strategies. If the first one succeeds in modifying an expression,
+then the second evaluation strategy is discarded. The function
+\inline{(==>)} differs from the usual composition of Kleisli arrows
+\inline{(>=>)}.
+\begin{code}
+(==>) :: (Expression -> Kernel Expression) -> (Expression -> Kernel Expression)
+                                           -> (Expression -> Kernel Expression)
+(f ==> g) e = f e >>= g'
+  where g' x | x == e    = g x
+             | otherwise = return x
+\end{code}
+The next function reevaluates an expression if it has been modified.
+\begin{code}
 next :: Expression -> Kernel Expression -> Kernel Expression
 next before after = after >>= reEval
-  where reEval e = if e == before then return e else eval e
-
-eval :: Expression -> Kernel Expression
-eval (Cmp hd@(Cmp _ _) args) = do
-  hd' <- eval hd
-  e' <- (Cmp hd') <$> (V.mapM eval args)
-  if hd /= hd'
-    then eval e'
-    else next e' $ (applySubValue ===> applySubcode) e'
-eval (Cmp hd@(Symbol x) args) = do
-  hd' <- eval hd
-  if hd /= hd'
-    then eval (Cmp hd' args)
-    else do e' <- (Cmp hd') <$> (evalArgs x args)
-            next e' $ applyRules e'
-
-eval (Cmp hd args) = Cmp <$> (eval hd) <*> (V.mapM eval args)
-
-eval e@(Symbol _) = next e $ (applyOwnValue ===> applyOwncode) e
-
-eval e = return e
-
+  where reEval e | e == before = return e
+                 | otherwise   = eval e
+\end{code}
+\subsection{Evaluation of composite expressions with symbolic head}
+We treat the case of a composite expression \verb?h[args..]?, such that
+\begin{itemize}
+\item the head \verb?h? is a symbol,
+\item \verb?h? is a fix point under evaluation.
+\end{itemize}
+\subsubsection{Processing arguments}
+The next step in evaluation is to process the arguments. The way
+arguments are treated is governed by the attributes of the symbol
+\verb?h?. First, arguments are evaluated. This involves the
+attributes \verb?HoldAll?, \verb?HoldFirst?, and \verb?HoldRest?, see
+table~\ref{eval:tab:evalAttributes}.
+\begin{table}[!ht]
+  \centering
+  \begin{tabular}{c|l}
+    \textbf{Attributes} & \textbf{Meaning} \\ \hline
+    \verb?HoldAll? & prevents the evaluation of all arguments \\
+    \verb?HoldFirst? & prevents the evaluation of the first argument \\
+    \verb?HoldRest? & prevents the evaluation of all arguments but the first one
+  \end{tabular}
+  \caption{Attributes governing evaluation of arguments}
+  \label{eval:tab:evalAttributes}
+\end{table}
+\begin{code}
 evalArgs :: Symbol -> V.Vector Expression -> Kernel (V.Vector Expression)
-evalArgs x args = do
-  hasHoldAll   <- x `hasAttribute` HoldAll
-  hasHoldFirst <- x `hasAttribute` HoldFirst
-  hasHoldRest  <- x `hasAttribute` HoldRest
+evalArgs h args = do
+  hasHoldAll   <- h `hasAttribute` HoldAll
+  hasHoldFirst <- h `hasAttribute` HoldFirst
+  hasHoldRest  <- h `hasAttribute` HoldRest
   case (hasHoldAll, hasHoldFirst, hasHoldRest) of
     (True, _, _) -> return args
     (_, True, _) -> evalFirst args
@@ -123,26 +158,50 @@ evalArgs x args = do
     evalRest es  = V.cons <$> (pure $ V.head es)
                           <*> (V.mapM eval $ V.tail es)
     evalAll      = V.mapM eval
-
--- flattens
+\end{code}
+Then, the arguments are flattened. For example, the expression
+\verb?Plus[Plus[a, b], c]? becomes \verb?Plus[a, b, c]? because
+\verb?Plus? is \verb?Flat?. Apart from the case of \verb?Flat?
+  symbols, arguments whose head is the builtin symbol \verb?Sequence?
+  are usually flattened, unless \verb?h? has the attribute
+  \verb?SequenceHold?.
+\begin{code}
 flattenArgs :: Symbol -> V.Vector Expression -> Kernel (V.Vector Expression)
-flattenArgs x args = do
+flattenArgs h args = do
   hs <- forbiddenHeads
   return $ V.concatMap (flatten hs) args
   where forbiddenHeads = do
-          hasHoldAllComplete <- x `hasAttribute` HoldAllComplete
-          hasSequenceHold    <- x `hasAttribute` SequenceHold
-          hasFlat            <- x `hasAttribute` Flat
-          return $ case (hasHoldAllComplete || hasSequenceHold, hasFlat) of
-            (True, True)   -> [x]
+          hasSequenceHold    <- h `hasAttribute` SequenceHold
+          hasFlat            <- h `hasAttribute` Flat
+          return $ case (hasSequenceHold, hasFlat) of
+            (True, True)   -> [h]
             (True, False)  -> []
-            (False, True)  -> [Builtin B.Sequence, x]
+            (False, True)  -> [Builtin B.Sequence, h]
             (False, False) -> [Builtin B.Sequence]
         flatten :: [Symbol] -> Expression -> V.Vector Expression
         flatten forbidden (Cmp (Symbol s) es) | s `elem` forbidden = es
         flatten _ e = V.singleton e
-
--- See if head can be threaded over lists
+\end{code}
+The next step is to thread the \verb?h? over lists if \verb?h? has
+the attribute \verb?Listable?. The table~\ref{eval:tab:thread} shows
+how an expression is evaluated when the head is \verb?Listable?.
+\begin{table}[!ht]
+  \centering
+  \begin{tabular}{c|c|c}
+    \textbf{Case} & \textbf{Expression} & \textbf{Evaluation} \\ \hline
+    1 & \verb?h[{a, b}, {c, d}]? & \verb?{h[a, c], h[b, d]}? \\
+    2 & \verb?h[a, {c, d}]? & \verb?{h[a, c], h[a, d]}? \\
+    3 & \verb?h[{a}, {c, d}]? & \verb?h[{a}, {c, d}]?
+  \end{tabular}
+  \caption{Evaluation with \texttt{Listable} head \texttt{h}}
+  \label{eval:tab:thread}
+\end{table}
+When one of the arguments is not a list, then it is automatically
+replicated, as in case 2 of table~\ref{eval:tab:thread}. When the
+lists have incompatible shapes (case 3 of
+table~\ref{eval:tab:thread}), then a warning is sent and the
+expression remains unchanged.
+\begin{code}
 threadLists :: Symbol -> V.Vector Expression -> Kernel (V.Vector Expression)
 threadLists x args = do
   hasListable <- x `hasAttribute` Listable
@@ -163,34 +222,68 @@ threadLists x args = do
     listify n e                         = V.replicate n e
     applyHead = Cmp (Symbol x)
     tranpose = undefined
-
+\end{code}
+After that, we check whether \verb?h? has the attribute
+\verb?Orderless?. If so, the arguments are sorted according to the
+canonical order (see section~\ref{expr:canonical_order}). Typically,
+commutative operations (\verb?Plus?, \verb?Times?) have the
+\verb?Orderless? attribute.
+\begin{code}
 sortArgs :: Symbol -> V.Vector Expression -> Kernel (V.Vector Expression)
 sortArgs x args = do
   hasOrderless <- x `hasAttribute` Orderless
   if hasOrderless
     then return $ sortVector args
     else return args
-  where sortVector = V.fromList . sort . V.toList
-
+  where sortVector = V.fromList . sort . V.toList -- TODO find better
+\end{code}
+Finally, we piece together our work to make the \inline{processArgs}
+function. If the symbol \verb?h? has the attribute
+\verb?HoldAllComplete?, then its prevents the processing of the
+arguments.
+\begin{code}
 processArgs :: Symbol -> V.Vector Expression -> Kernel (V.Vector Expression)
-processArgs x =
-  (evalArgs x) >=> (flattenArgs x) >=> (threadLists x) >=> (sortArgs x)
+processArgs h args = do
+  hasHoldAllComplete <- h `hasAttribute` HoldAllComplete
+  if hasHoldAllComplete
+    then return args
+    else process args
+  where process = (evalArgs h) >=> (flattenArgs h)
+                               >=> (threadLists h)
+                               >=> (sortArgs h)
+\end{code}
 
+\subsubsection{Applying rules}
 
--- apply builtin code, first try upcode, then downcode
-applyBuiltinRules :: Expression -> Kernel Expression
-applyBuiltinRules = applyUpcode ===> applyDowncode
-
-(===>) :: (Expression -> Kernel Expression) -> (Expression -> Kernel Expression) -> (Expression -> Kernel Expression)
-(f ===> g) e = do
-  e' <- f e
-  if e == e' then g e else return e'
-
+After the processing of the arguments, the rules associated to
+the symbol \verb?h? are applied. Priority is given to user-defined
+rules over built-in rules.
+\begin{code}
+applyRules :: Expression -> Kernel Expression
+applyRules = applyUserRules ==> applyBuiltinRules
+\end{code}
+User-defined rules are not implemented yet.
+\begin{code}
 applyUserRules :: Expression -> Kernel Expression
 applyUserRules = return . id -- TODO: modify
+\end{code}
+As for user-defined rules, upcode is executed before downcode.
+\begin{code}
+applyBuiltinRules :: Expression -> Kernel Expression
+applyBuiltinRules = applyUpcode ==> applyDowncode
 
-applyRules :: Expression -> Kernel Expression
-applyRules = applyUserRules ===> applyBuiltinRules
+applyUpcode :: Expression -> Kernel Expression
+applyUpcode e@(Cmp _ []) = return e
+applyUpcode e@(Cmp _ args) = do
+  upcodes <- V.mapM (getUpcode . superHead) args
+  foldl1 (==>) upcodes $ e
+  where getUpcode (Symbol s) = do
+          def <- getDef s
+          return $ case (upcode def) of
+            Nothing -> return . id
+            Just f  -> f
+        getUpcode _ = return (return . id)
+applyUpcode _ = error "unreachable"
 
 applyDowncode :: Expression -> Kernel Expression
 applyDowncode e@(Cmp (Symbol x) args) = do
@@ -200,20 +293,9 @@ applyDowncode e@(Cmp (Symbol x) args) = do
     Just f  -> next e $ f args
   where getDowncode symb = getDef symb >>= return . downcode
 applyDowncode _ = error "unreachable"
+\end{code}
 
-applyUpcode :: Expression -> Kernel Expression
-applyUpcode e@(Cmp _ []) = return e
-applyUpcode e@(Cmp _ args) = do
-  upcodes <- V.mapM (getUpcode . superHead) args
-  foldl1 (===>) upcodes $ e
-  where getUpcode (Symbol s) = do
-          def <- getDef s
-          return $ case (upcode def) of
-            Nothing -> return . id
-            Just f  -> f
-        getUpcode _ = return (return . id)
-applyUpcode _ = error "unreachable"
-
+\begin{code}
 applySubValue :: Expression -> Kernel Expression
 applySubValue = return . id -- TODO
 
@@ -235,4 +317,25 @@ applyOwncode e@(Symbol s) = do
     Nothing -> return e
     Just f  -> f
 applyOwncode _ = error "unreachable"
+
+eval :: Expression -> Kernel Expression
+eval (Cmp hd@(Cmp _ _) args) = do
+  hd' <- eval hd
+  e' <- (Cmp hd') <$> (V.mapM eval args)
+  if hd /= hd'
+    then eval e'
+    else next e' $ (applySubValue ==> applySubcode) e'
+eval (Cmp hd@(Symbol x) args) = do
+  hd' <- eval hd
+  if hd /= hd'
+    then eval (Cmp hd' args)
+    else do e' <- (Cmp hd') <$> (evalArgs x args)
+            next e' $ applyRules e'
+
+eval (Cmp hd args) = Cmp <$> (eval hd) <*> (V.mapM eval args)
+
+eval e@(Symbol _) = next e $ (applyOwnValue ==> applyOwncode) e
+
+eval e = return e
 \end{code}
+\end{document}

@@ -64,6 +64,7 @@ pattern CmpB h args = Cmp (SymbolB h) args
 \end{code}
 
 \subsection{Canonical order}
+\label{expr:canoncical_order}
 We define a canonical order for expressions. This order plays an
 important role in many parts (see~\verb?Orderless?, \verb?Sort?).
 
