@@ -12,6 +12,7 @@ import Control.Monad
 import Data.Char hiding (digitToInt)
 import Text.ParserCombinators.Parsec hiding (space)
 
+import qualified Kalkulu.Expression as E
 import qualified Kalkulu.Builtin as B
 \end{code}
 
@@ -173,8 +174,12 @@ Parsing in \emph{Kalkulu} is an impure process. To parse a symbol
 information is only available at run time. Even if knew it, it is
 also necessary to put new symbols in the symbol table.
 
-For the moment we neglect all side-effects and use the following
-type.
+To avoid mixing pure and impure code too early, we will represent
+expressions with a new data type \inline{Expr}, local to this
+module. All the side-effects will be circumscribed later in a
+function, which converts from the type \inline{Expr} to
+\inline{E.Expression}. Another advantage of this method is to prevent
+the appearance of side-effects before the parsing is complete.
 \begin{code}
 type Name = String
 

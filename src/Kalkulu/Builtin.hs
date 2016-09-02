@@ -1,5 +1,7 @@
 module Kalkulu.Builtin where
 
+import Data.Array (Ix)
+
 data BuiltinSymbol =
   AddTo
   | All
@@ -54,6 +56,7 @@ data BuiltinSymbol =
   | RuleDelayed
   | RuleRepeated
   | SameQ
+  | Sequence
   | Set
   | SetDelayed
   | Slot
@@ -69,4 +72,4 @@ data BuiltinSymbol =
   | Unset
   | UpSet
   | UpSetDelayed
-  deriving (Bounded, Enum, Eq, Show)
+  deriving (Bounded, Enum, Eq, Ix, Ord, Show)

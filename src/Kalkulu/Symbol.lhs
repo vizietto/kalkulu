@@ -11,8 +11,9 @@ import qualified Kalkulu.Builtin as B
 import Data.Monoid ((<>))
 \end{code}
 We define the \inline{Symbol} type, to represent \emph{Kalkulu}'s
-symbolic atoms. Built-in symbols are treated differently, because
-they require a special treatment from the kernel.
+symbolic atoms. Built-in symbols are treated differently from
+user-defined symbols, because they require a special treatment from
+the kernel.
 \begin{code}
 data Symbol =
     Builtin    B.BuiltinSymbol

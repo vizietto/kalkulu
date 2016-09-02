@@ -1,6 +1,8 @@
 module Main where
 
 import Kalkulu.Parser
+import qualified Kalkulu.Expression
+import qualified Kalkulu.Evaluation
 import Text.ParserCombinators.Parsec
 import Control.Monad.Trans
 import System.Console.Haskeline
