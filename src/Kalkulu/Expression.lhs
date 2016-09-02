@@ -32,13 +32,12 @@ data Expression =
   | Cmp Expression (V.Vector Expression)
   deriving (Eq)
 \end{code}
-
+The leftmost atom in an expression is called its \emph{super head}.
 \begin{code}
 superHead :: Expression -> Expression
 superHead (Cmp h _) = superHead h
 superHead expr      = expr
 \end{code}
-
 Next we make \inline{Expression} an instance of the \inline{Show}
 typeclass. This is not strictly necessary, as the burden of printing
 expressions is let to the front-end. But there is currently no

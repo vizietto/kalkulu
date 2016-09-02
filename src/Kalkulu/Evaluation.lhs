@@ -1,3 +1,12 @@
+\documentclass[main.tex]{subfiles}
+
+\begin{document}
+
+\chapter{Evaluate}
+
+This chapter describes the module \inline{Kalkulu.Evaluation}, whose
+header is
+\begin{code}
 {-# LANGUAGE OverloadedLists #-}
 
 module Kalkulu.Evaluation where
@@ -17,7 +26,11 @@ import Kalkulu.VectorPattern
 import qualified Kalkulu.Builtin as B
 import Kalkulu.Expression
 import Kalkulu.Symbol
+\end{code}
 
+\section{Kernel}
+
+\begin{code}
 type Kernel = ReaderT Environment IO
 
 data Attribute = Constant
@@ -40,9 +53,7 @@ data Attribute = Constant
                deriving Eq
 
 data Definition = Definition {
-    name       :: String
-  , context    :: String
-  , attributes :: IORef [Attribute]
+    attributes :: IORef [Attribute]
   , ownvalue   :: Maybe Expression
   , owncode    :: Maybe (Kernel Expression)
   , upcode     :: Maybe (Expression -> Kernel Expression)
@@ -224,6 +235,4 @@ applyOwncode e@(Symbol s) = do
     Nothing -> return e
     Just f  -> f
 applyOwncode _ = error "unreachable"
-
-sendWarning :: a
-sendWarning = undefined
+\end{code}
