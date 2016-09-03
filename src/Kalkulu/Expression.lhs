@@ -16,6 +16,7 @@ import qualified Data.Vector as V
 
 import qualified Kalkulu.Builtin as B
 import Kalkulu.Symbol
+import Kalkulu.VectorPattern
 \end{code}
 
 \subsection{Representation of expressions}
@@ -180,11 +181,10 @@ should be at the end of the argument lists (because \texttt{Times} is
 compareExpr (CmpB B.Times []) (CmpB B.Times []) = EQ
 compareExpr (CmpB B.Times xs) (CmpB B.Times []) =
   compare (V.last xs) (Number 1) <> GT
-compareExpr (CmpB B.Times []) (CmpB B.Times ys) =
-  compare (Number 1) (V.last ys) <> LT
-compareExpr (CmpB B.Times xs) (CmpB B.Times ys) =
-  compare (V.last xs) (V.last ys) <> compare (CmpB B.Times (V.init xs))
-                                             (CmpB B.Times (V.init ys))
+compareExpr (CmpB B.Times []) (CmpB B.Times (_ :> y)) =
+  compare (Number 1) y <> LT
+compareExpr (CmpB B.Times (xs :> x)) (CmpB B.Times (ys :> y)) =
+  compare x y <> compare (CmpB B.Times xs) (CmpB B.Times ys)
 \end{code}
 The expression \verb?Times[]? evaluates to \verb?1?, which motivates
 the following choice:

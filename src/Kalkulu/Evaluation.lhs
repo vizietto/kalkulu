@@ -33,28 +33,13 @@ import Kalkulu.Symbol
 \begin{code}
 type Kernel = ReaderT Environment IO
 
-data Attribute = Constant
-               | Flat
-               | HoldAll
-               | HoldAllComplete
-               | HoldFirst
-               | HoldRest
-               | Listable
-               | Locked
-               | NHoldAll
-               | NHoldRest
-               | NumericFunction
-               | OneIdentity
-               | Orderless
-               | Protected
-               | SequenceHold
-               | Stub
-               | Temporary
-               deriving Eq
+data Attribute = Constant | Flat | HoldAll | HoldAllComplete | HoldFirst
+  | HoldRest | Listable | Locked | NHoldAll | NHoldRest | NumericFunction
+  | OneIdentity | Orderless | Protected | SequenceHold | Stub | Temporary
+  deriving Eq
 
 data Definition = Definition {
     attributes :: IORef [Attribute]
-  , ownvalue   :: Maybe Expression
   , owncode    :: Maybe (Kernel Expression)
   , upcode     :: Maybe (Expression -> Kernel Expression)
   , subcode    :: Maybe (Expression -> Kernel Expression)
@@ -152,12 +137,24 @@ evalArgs h args = do
     _            -> evalAll   args
   where
     evalFirst [] = return V.empty
-    evalFirst es = V.cons <$> (eval $ V.head es)
+    evalFirst es = V.cons <$> (evaluate $ V.head es)
                           <*> (pure $ V.tail es)
     evalRest []  = return V.empty
     evalRest es  = V.cons <$> (pure $ V.head es)
-                          <*> (V.mapM eval $ V.tail es)
-    evalAll      = V.mapM eval
+                          <*> (V.mapM evaluate $ V.tail es)
+    evalAll      = V.mapM evaluate
+\end{code}
+However, one can force the evaluation of one or several arguments
+with \verb?Evaluate?, as shown in the following snippet.
+\begin{verbatim}
+In[1]:= Hold[Evaluate[1 + 1, 2 + 2], 2 + 2]
+Out[1]= Hold[2, 4, 2 + 2]
+\end{verbatim}
+\begin{code}
+forceEval :: V.Vector Expression -> Kernel (V.Vector Expression)
+forceEval args = (V.concat . V.toList) <$> V.mapM f args
+  where f (CmpB B.Evaluate es) = V.mapM evaluate es
+        f e = return $ V.singleton e
 \end{code}
 Then, the arguments are flattened. For example, the expression
 \verb?Plus[Plus[a, b], c]? becomes \verb?Plus[a, b, c]? because
@@ -211,8 +208,8 @@ threadLists x args = do
       case lengths of
         []                    -> return args
         h :< t | all (== h) t -> let l = fromJust h in
-              return $ V.map applyHead $ tranpose $ V.map (listify l) args
-               | otherwise    -> return args -- TODO sendWarning
+          return $ V.map applyHead $ tranpose $ V.map (listify l) args
+        _                     -> return args -- TODO sendWarning
     else return args
   where
     length' :: Expression -> Maybe Int
@@ -248,7 +245,8 @@ processArgs h args = do
   if hasHoldAllComplete
     then return args
     else process args
-  where process = (evalArgs h) >=> (flattenArgs h)
+  where process = (evalArgs h) >=> forceEval
+                               >=> (flattenArgs h)
                                >=> (threadLists h)
                                >=> (sortArgs h)
 \end{code}
@@ -267,7 +265,7 @@ User-defined rules are not implemented yet.
 applyUserRules :: Expression -> Kernel Expression
 applyUserRules = return . id -- TODO: modify
 \end{code}
-As for user-defined rules, upcode is executed before downcode.
+As for built-in rules, upcode is executed before downcode.
 \begin{code}
 applyBuiltinRules :: Expression -> Kernel Expression
 applyBuiltinRules = applyUpcode ==> applyDowncode
@@ -279,9 +277,7 @@ applyUpcode e@(Cmp _ args) = do
   foldl1 (==>) upcodes $ e
   where getUpcode (Symbol s) = do
           def <- getDef s
-          return $ case (upcode def) of
-            Nothing -> return . id
-            Just f  -> f
+          return $ maybe (return . id) id (upcode def)
         getUpcode _ = return (return . id)
 applyUpcode _ = error "unreachable"
 
@@ -295,17 +291,11 @@ applyDowncode e@(Cmp (Symbol x) args) = do
 applyDowncode _ = error "unreachable"
 \end{code}
 
+\subsection{Evaluation of symbols}
+Again, user-defined rules are preferred over built-in code.
 \begin{code}
-applySubValue :: Expression -> Kernel Expression
-applySubValue = return . id -- TODO
-
-applySubcode :: Expression -> Kernel Expression
-applySubcode e = case (superHead e) of
-  Symbol s -> do def <- getDef s
-                 case (subcode def) of
-                   Nothing -> return e
-                   Just f  -> f e
-  _        -> return e
+applyOwnRules :: Expression -> Kernel Expression
+applyOwnRules = applyOwnValue ==> applyOwncode
 
 applyOwnValue :: Expression -> Kernel Expression
 applyOwnValue = return . id -- TODO
@@ -313,28 +303,52 @@ applyOwnValue = return . id -- TODO
 applyOwncode :: Expression -> Kernel Expression
 applyOwncode e@(Symbol s) = do
   def <- getDef s
-  case (owncode def) of
-    Nothing -> return e
-    Just f  -> f
+  maybe (return e) id (owncode def)
 applyOwncode _ = error "unreachable"
+\end{code}
+
+\subsection{Evaluation of composite expressions with composite heads}
+In the case of a multi-composite expression, we look for the rules
+attached to its superhead.
+\begin{code}
+applySubRules :: Expression -> Kernel Expression
+applySubRules = applySubValue ==> applySubcode
+
+applySubValue :: Expression -> Kernel Expression
+applySubValue = return . id -- TODO
+
+applySubcode :: Expression -> Kernel Expression
+applySubcode e = case (superHead e) of
+  Symbol s -> do def <- getDef s
+                 maybe (return e) ($ e) (subcode def)
+  _        -> return e
+\end{code}
+
+\section{The evaluation function}
+\begin{code}
+evaluate :: Expression -> Kernel Expression
+evaluate e = do
+  -- put e in the trace
+  e' <- eval e
+  if e == e' then return e else evaluate e'
 
 eval :: Expression -> Kernel Expression
 eval (Cmp hd@(Cmp _ _) args) = do
-  hd' <- eval hd
-  e' <- (Cmp hd') <$> (V.mapM eval args)
+  hd' <- evaluate hd
+  e' <- (Cmp hd') <$> (V.mapM evaluate args)
   if hd /= hd'
-    then eval e'
-    else next e' $ (applySubValue ==> applySubcode) e'
+    then return e'
+    else (applySubValue ==> applySubcode) e'
 eval (Cmp hd@(Symbol x) args) = do
-  hd' <- eval hd
+  hd' <- evaluate hd
   if hd /= hd'
-    then eval (Cmp hd' args)
+    then return (Cmp hd' args)
     else do e' <- (Cmp hd') <$> (evalArgs x args)
-            next e' $ applyRules e'
+            applyRules e'
 
-eval (Cmp hd args) = Cmp <$> (eval hd) <*> (V.mapM eval args)
+eval (Cmp hd args) = Cmp <$> (evaluate hd) <*> (V.mapM evaluate args)
 
-eval e@(Symbol _) = next e $ (applyOwnValue ==> applyOwncode) e
+eval e@(Symbol _) = (applyOwnValue ==> applyOwncode) e
 
 eval e = return e
 \end{code}

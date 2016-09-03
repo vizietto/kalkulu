@@ -19,6 +19,7 @@ data BuiltinSymbol =
   | DivideBy
   | Dot
   | Equal
+  | Evaluate
   | Factorial
   | Factorial2
   | Function
