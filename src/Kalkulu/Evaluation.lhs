@@ -152,9 +152,9 @@ Out[1]= Hold[2, 4, 2 + 2]
 \end{verbatim}
 \begin{code}
 forceEval :: V.Vector Expression -> Kernel (V.Vector Expression)
-forceEval args = (V.concat . V.toList) <$> V.mapM f args
-  where f (CmpB B.Evaluate es) = V.mapM evaluate es
-        f e = return $ V.singleton e
+forceEval args = V.mapM f args
+  where f e@(CmpB B.Evaluate _) = evaluate e
+        f e = return e
 \end{code}
 Then, the arguments are flattened. For example, the expression
 \verb?Plus[Plus[a, b], c]? becomes \verb?Plus[a, b, c]? because
