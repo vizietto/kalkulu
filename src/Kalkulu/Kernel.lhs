@@ -50,7 +50,8 @@ emptyDef = do
   return $ Definition attr Nothing Nothing Nothing Nothing
 
 data Environment = Environment {
-    moduleNumber   :: IORef Int
+    iterationLimit :: IORef Int
+  , recursionLimit :: IORef Int
   , context        :: IORef String
   , contextPath    :: IORef [String]
   , symbolTable    :: IORef (Map.Map (ContextName, SymbolName) Symbol)
@@ -68,6 +69,12 @@ getDef symb = do
 -- get symbol from name
 getCurrentContext :: Kernel String
 getCurrentContext = ask >>= lift . readIORef . context
+
+getIterationLimit :: Kernel Int
+getIterationLimit = ask >>= lift . readIORef . iterationLimit
+
+getRecursionLimit :: Kernel Int
+getRecursionLimit = ask >>= lift . readIORef . recursionLimit
 
 getContextPath :: Kernel [String]
 getContextPath = ask >>= lift . readIORef . contextPath
