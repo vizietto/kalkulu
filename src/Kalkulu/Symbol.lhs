@@ -5,7 +5,7 @@
 This section describes the module \inline{Symbol}. We begin by a
 series of \inline{import}s.
 \begin{code}
-module Kalkulu.Symbol(Symbol(..)) where
+module Kalkulu.Symbol where
 
 import qualified Kalkulu.Builtin as B
 import Data.Monoid ((<>))

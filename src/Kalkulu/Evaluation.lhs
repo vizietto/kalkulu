@@ -16,8 +16,9 @@ import qualified Data.Vector as V
 import Data.Array
 import Data.IORef
 import Data.List (sort)
+import qualified Data.Map as Map
 import Data.Maybe (isJust, fromJust)
-import qualified Data.Vector.Mutable as MV
+import qualified Data.Vector.Mutable.Dynamic as MV
 import Control.Monad
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Reader
@@ -46,9 +47,16 @@ data Definition = Definition {
   , downcode   :: Maybe (V.Vector Expression -> Kernel Expression)
   }
 
+emptyDef :: Kernel Definition
+emptyDef = do
+  attr <- lift $ newIORef []
+  return $ Definition attr Nothing Nothing Nothing Nothing
+
 data Environment = Environment {
     moduleNumber   :: IORef Int
-  , currentContext :: IORef String
+  , context        :: IORef String
+  , contextPath    :: IORef [String]
+  , symbolTable    :: IORef (Map.Map (ContextName, SymbolName) Symbol)
   , builtinDefs    :: Array B.BuiltinSymbol Definition
   , defs           :: MV.IOVector Definition
   }
@@ -59,6 +67,33 @@ getDef symb = do
   case symb of
     Builtin s        -> return $ (builtinDefs env) ! s
     UserSymbol i _ _ -> lift $ MV.read (defs env) i
+
+-- get symbol from name
+getCurrentContext :: Kernel String
+getCurrentContext = ask >>= lift . readIORef . context
+
+getContextPath :: Kernel [String]
+getContextPath = ask >>= lift . readIORef . contextPath
+
+getTotalName :: String -> Kernel (ContextName, SymbolName)
+getTotalName = undefined
+
+getSymbol :: String -> Kernel Symbol
+getSymbol name = do
+  (c, s) <- getTotalName name
+  env <- ask
+  tbl <- lift $ readIORef (symbolTable env)
+  maybe (createSymbol (c, s)) return (Map.lookup (c, s) tbl)
+
+createSymbol :: (ContextName, SymbolName) -> Kernel Symbol
+createSymbol (c, s) = do
+  env <- ask
+  let symbolDefs = defs env
+  idNumber <- lift $ MV.length symbolDefs
+  let symb = UserSymbol idNumber c s
+  emptyDef >>= MV.pushBack symbolDefs
+  lift $ modifyIORef (symbolTable env) (Map.insert (c, s) symb)
+  return symb
 
 hasAttribute :: Symbol -> Attribute -> Kernel Bool
 x `hasAttribute` att = do
@@ -275,9 +310,8 @@ applyUpcode e@(Cmp _ args) = do
 applyUpcode _ = error "unreachable"
 
 applyDowncode :: Expression -> Kernel Expression
-applyDowncode e@(Cmp (Symbol x) args) = do
-  code <- getDowncode x
-  maybe (return e) ($ args) code
+applyDowncode e@(Cmp (Symbol x) args) =
+  getDowncode x >>= maybe (return e) ($ args)
   where getDowncode symb = getDef symb >>= return . downcode
 applyDowncode _ = error "unreachable"
 \end{code}

@@ -24,6 +24,7 @@ executable kalkulu
     array,
     base >=4.8 && <4.9,
     containers,
+    dynamic-mvector,
     haskeline,
     mtl,
     parsec,
