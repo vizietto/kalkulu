@@ -10,10 +10,12 @@ module Kalkulu.Parser where
 
 import Control.Monad
 import Data.Char hiding (digitToInt)
+import qualified Data.Vector
 import Text.ParserCombinators.Parsec hiding (space)
 
 import qualified Kalkulu.Expression as E
 import qualified Kalkulu.Builtin as B
+import Kalkulu.Kernel
 \end{code}
 
 \hideFromLaTeX{
@@ -1227,5 +1229,16 @@ tilde = Infix [\ignoreEOL -> do void $ lexeme (char '~') True
                                 s <- lexeme identifier True
                                 void $ lexeme (char '~') ignoreEOL
                                 return $ Tilde s]
+\end{code}
+\section{Conversion}
+\begin{code}
+conversion :: Expr -> Kernel E.Expression
+conversion (Number i)  = return $ E.Number i
+conversion (String s)  = return $ E.String s
+conversion (Symbol s)  = liftM E.Symbol $ getSymbol s
+conversion (Builtin b) = return $ (E.SymbolB b)
+conversion (Cmp h args) =
+  liftM2 E.Cmp (conversion h)
+               (Data.Vector.fromList <$> (mapM conversion args))
 \end{code}
 \end{document}

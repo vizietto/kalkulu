@@ -67,9 +67,9 @@ data Definition = Definition {
   , downcode   :: Maybe (V.Vector Expression -> Kernel Expression)
   }
 
-emptyDef :: Kernel Definition
+emptyDef :: IO Definition
 emptyDef = do
-  attr <- lift $ newIORef []
+  attr <- newIORef []
   return $ Definition attr Nothing Nothing Nothing Nothing
 
 data Infinitable a = Finite a | Infinity
@@ -84,6 +84,18 @@ data Environment = Environment {
   , defs           :: MV.IOVector Definition
   }
 
+defaultEnv :: IO Environment
+defaultEnv = Environment
+  <$> newIORef (Finite 4096) -- iteration limit
+  <*> newIORef (Finite 1024) -- recursion limit
+  <*> newIORef "Global`"              -- current context
+  <*> newIORef ["System`", "Global`"] -- context path
+  <*> newIORef (Map.fromList [(("System`", show b), Builtin b) -- symbolTable
+                                            | b <- [minBound..]])
+  <*> (array (minBound, maxBound) <$> builtin)
+  <*> (MV.new 0)
+  where builtin :: IO [(B.BuiltinSymbol, Definition)]
+        builtin = sequence [(,) b <$> emptyDef | b <- [minBound..]]
 
 type Kernel = ReaderT Environment IO
 
@@ -132,8 +144,8 @@ createSymbol (c, s) = do
   env <- ask
   let symbolDefs = defs env
   idNumber <- lift $ MV.length symbolDefs
-  let symb = UserSymbol idNumber c s
-  emptyDef >>= MV.pushBack symbolDefs
+  let symb = UserSymbol idNumber s c
+  (lift emptyDef) >>= MV.pushBack symbolDefs
   lift $ modifyIORef (symbolTable env) (Map.insert (c, s) symb)
   return symb
 
