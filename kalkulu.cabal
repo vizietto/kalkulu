@@ -28,6 +28,7 @@ executable kalkulu
     haskeline,
     mtl,
     parsec,
+    split,
     transformers,
     vector
   hs-source-dirs:      src

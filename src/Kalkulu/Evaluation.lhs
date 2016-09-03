@@ -15,7 +15,8 @@ import qualified Data.Vector as V
 
 import Data.Array
 import Data.IORef
-import Data.List (sort)
+import Data.List (sort, intercalate, find)
+import Data.List.Split (splitWhen)
 import qualified Data.Map as Map
 import Data.Maybe (isJust, fromJust)
 import qualified Data.Vector.Mutable.Dynamic as MV
@@ -76,7 +77,17 @@ getContextPath :: Kernel [String]
 getContextPath = ask >>= lift . readIORef . contextPath
 
 getTotalName :: String -> Kernel (ContextName, SymbolName)
-getTotalName = undefined
+getTotalName ('`':name) = do current <- getCurrentContext
+                             getTotalName (current ++ name)
+getTotalName name = case splitWhen (== '`') name of
+  []  -> error "unreachable: void symbol name"
+  [s] -> do path <- getContextPath
+            current <- getCurrentContext
+            env <- ask
+            tbl <- lift $ readIORef (symbolTable env)
+            let c = find (\x -> isJust $ Map.lookup (x, s) tbl) path
+            return $ maybe (current, s) ((,) s) c
+  cs  -> return ((intercalate "`" (init cs)) ++ "`", last cs)
 
 getSymbol :: String -> Kernel Symbol
 getSymbol name = do
