@@ -81,7 +81,7 @@ we start with some basic principles:
 \item In a composite expression, the head is evaluated first.
 \end{itemize}
 
-First, we need some functions to control the evaluation flow. The
+First, we need a function to control the evaluation flow. The
 following function \inline{(==>)} combines two evaluation
 strategies. If the first one succeeds in modifying an expression,
 then the second evaluation strategy is discarded. The function
@@ -93,13 +93,6 @@ then the second evaluation strategy is discarded. The function
 (f ==> g) e = f e >>= g'
   where g' x | x == e    = g x
              | otherwise = return x
-\end{code}
-The next function reevaluates an expression if it has been modified.
-\begin{code}
-next :: Expression -> Kernel Expression -> Kernel Expression
-next before after = after >>= reEval
-  where reEval e | e == before = return e
-                 | otherwise   = eval e
 \end{code}
 \subsection{Evaluation of composite expressions with symbolic head}
 We treat the case of a composite expression \verb?h[args..]?, such that
@@ -144,11 +137,11 @@ evalArgs h args = do
                           <*> (V.mapM evaluate $ V.tail es)
     evalAll      = V.mapM evaluate
 \end{code}
-However, one can force the evaluation of one or several arguments
-with \verb?Evaluate?, as shown in the following snippet.
+However, one can force the evaluation of one argument with
+\verb?Evaluate?, as shown in the following snippet.
 \begin{verbatim}
-In[1]:= Hold[Evaluate[1 + 1, 2 + 2], 2 + 2]
-Out[1]= Hold[2, 4, 2 + 2]
+In[1]:= Hold[Evaluate[2 + 2], 2 + 2]
+Out[1]= Hold[4, 2 + 2]
 \end{verbatim}
 \begin{code}
 forceEval :: V.Vector Expression -> Kernel (V.Vector Expression)
@@ -284,9 +277,7 @@ applyUpcode _ = error "unreachable"
 applyDowncode :: Expression -> Kernel Expression
 applyDowncode e@(Cmp (Symbol x) args) = do
   code <- getDowncode x
-  case code of
-    Nothing -> return e
-    Just f  -> next e $ f args
+  maybe (return e) ($ args) code
   where getDowncode symb = getDef symb >>= return . downcode
 applyDowncode _ = error "unreachable"
 \end{code}
