@@ -24,6 +24,8 @@ import Kalkulu.Kernel
 import Kalkulu.Symbol
 \end{code}
 
+\section{Introduction}
+
 In \emph{Kalkulu}, \emph{evaluation} is the transformation of
 expressions by applying \emph{rules}. We will present the
 evaluation procedure on the fly with great detail. First
@@ -272,12 +274,28 @@ applySubcode e = case (superHead e) of
 \end{code}
 
 \section{The evaluation function}
-\begin{code}
+\begin{spec}
+-- False
 evaluate :: Expression -> Kernel Expression
 evaluate e = do
   -- put e in the trace
   e' <- eval e
   if e == e' then return e else evaluate e'
+\end{spec}
+\begin{code}
+evaluate :: Expression -> Kernel Expression
+evaluate e = do
+  limit <- getIterationLimit
+  steps <- take' limit <$> (sequence $ iterate nextStep (return e))
+  return $ firstFixPoint steps
+  where nextStep = (>>= eval)
+        take' (Finite n) = take n
+        take' Infinity   = id
+        firstFixPoint [] = error "unreachable"
+        firstFixPoint [e1] = CmpB B.Hold (V.singleton e1)
+                             -- TODO sendMessage itlim
+        firstFixPoint (e1: es@(e2:_)) | e1 == e2  = e1
+                                      | otherwise = firstFixPoint es
 
 eval :: Expression -> Kernel Expression
 eval (Cmp hd@(Cmp _ _) args) = do

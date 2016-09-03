@@ -49,9 +49,11 @@ emptyDef = do
   attr <- lift $ newIORef []
   return $ Definition attr Nothing Nothing Nothing Nothing
 
+data Infinitable a = Finite a | Infinity
+
 data Environment = Environment {
-    iterationLimit :: IORef Int
-  , recursionLimit :: IORef Int
+    iterationLimit :: IORef (Infinitable Int)
+  , recursionLimit :: IORef (Infinitable Int)
   , context        :: IORef String
   , contextPath    :: IORef [String]
   , symbolTable    :: IORef (Map.Map (ContextName, SymbolName) Symbol)
@@ -66,14 +68,14 @@ getDef symb = do
     Builtin s        -> return $ (builtinDefs env) ! s
     UserSymbol i _ _ -> lift $ MV.read (defs env) i
 
--- get symbol from name
 getCurrentContext :: Kernel String
 getCurrentContext = ask >>= lift . readIORef . context
 
-getIterationLimit :: Kernel Int
+-- Nothing means Infinity
+getIterationLimit :: Kernel (Infinitable Int)
 getIterationLimit = ask >>= lift . readIORef . iterationLimit
 
-getRecursionLimit :: Kernel Int
+getRecursionLimit :: Kernel (Infinitable Int)
 getRecursionLimit = ask >>= lift . readIORef . recursionLimit
 
 getContextPath :: Kernel [String]

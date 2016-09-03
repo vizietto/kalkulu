@@ -3,7 +3,7 @@ module Kalkulu.Builtin where
 import Data.Array (Ix)
 
 data BuiltinSymbol =
-  AddTo
+    AddTo
   | All
   | Alternative
   | And
@@ -26,6 +26,7 @@ data BuiltinSymbol =
   | Get
   | Greater
   | GreaterEqual
+  | Hold
   | Increment
   | Inequality
   | Less
