@@ -288,7 +288,7 @@ evaluate e = do
   limit <- getIterationLimit
   steps <- take' limit <$> (sequence $ iterate nextStep (return e))
   return $ firstFixPoint steps
-  where nextStep = (>>= eval)
+  where nextStep = (>>= eval) -- TODO add trace
         take' (Finite n) = take n
         take' Infinity   = id
         firstFixPoint [] = error "unreachable"
@@ -317,4 +317,7 @@ eval e@(Symbol _) = (applyOwnValue ==> applyOwncode) e
 
 eval e = return e
 \end{code}
+
+\section{Numeric evaluation}
+
 \end{document}

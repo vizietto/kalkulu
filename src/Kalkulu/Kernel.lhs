@@ -28,9 +28,32 @@ import Kalkulu.Expression
 import Kalkulu.Symbol
 \end{code}
 
-\begin{code}
-type Kernel = ReaderT Environment IO
+\section{Introduction}
 
+The evaluation function, that will be defined in the next chapter, is
+not a pure function of type \inline{Expression -> Expression}, because
+in an interpreted language such as \emph{Kalkulu}, evaluation is
+fundamentally impure. Instead, it has type
+\inline{Expression -> Kernel Expression}, where the type
+constructor \inline{Kernel} is the subject of this
+chapter. \inline{Kernel} is defined to be a monad, and as such, it
+easily combines a lot of functionalities, under which
+\begin{enumerate}
+\item the ability to perform some IO actions, like opening a file,
+  reading the time, etc.
+\item the maintenance of a huge state: definitions for each symbol,
+  configuration variables, etc.
+\item communication with the front-end: not all IO actions are
+  performed by the kernel, some (like printing) are left to the
+  front-end,
+\item the management of messages (the \emph{Kalkulu} term for warnings),
+\item controlling evaluation: stopping infinite loops,
+\item storing past evaluations for debbuging purposes.
+\end{enumerate}
+
+\section{Environment}
+
+\begin{code}
 data Attribute = Constant | Flat | HoldAll | HoldAllComplete | HoldFirst
   | HoldRest | Listable | Locked | NHoldAll | NHoldRest | NumericFunction
   | OneIdentity | Orderless | Protected | SequenceHold | Stub | Temporary
@@ -60,6 +83,9 @@ data Environment = Environment {
   , builtinDefs    :: Array B.BuiltinSymbol Definition
   , defs           :: MV.IOVector Definition
   }
+
+
+type Kernel = ReaderT Environment IO
 
 getDef :: Symbol -> Kernel Definition
 getDef symb = do
