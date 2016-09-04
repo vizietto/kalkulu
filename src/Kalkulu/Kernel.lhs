@@ -129,7 +129,7 @@ getTotalName name = case splitWhen (== '`') name of
             env <- ask
             tbl <- lift $ readIORef (symbolTable env)
             let c = find (\x -> isJust $ Map.lookup (x, s) tbl) path
-            return $ maybe (current, s) ((,) s) c
+            return $ maybe (current, s) (flip (,) s) c
   cs  -> return ((intercalate "`" (init cs)) ++ "`", last cs)
 
 getSymbol :: String -> Kernel Symbol
