@@ -4,6 +4,8 @@ import Kalkulu.Parser
 import qualified Kalkulu.Expression
 import qualified Kalkulu.Evaluation
 import Kalkulu.Kernel
+import Kalkulu.DefaultEnv (defaultEnv)
+import Kalkulu.Builtin.If
 import Text.ParserCombinators.Parsec
 import Control.Monad.Trans
 import Control.Monad.Trans.Reader

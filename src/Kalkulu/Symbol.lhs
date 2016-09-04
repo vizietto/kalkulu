@@ -7,7 +7,7 @@ series of \inline{import}s.
 \begin{code}
 module Kalkulu.Symbol where
 
-import qualified Kalkulu.Builtin as B
+import qualified Kalkulu.BuiltinSymbol as B
 import Data.Monoid ((<>))
 \end{code}
 We define the \inline{Symbol} type, to represent \emph{Kalkulu}'s
@@ -32,7 +32,7 @@ values, etc.) are defined elsewhere in the kernel. A variable of type
 Here, \inline{B.BuiltinSymbol} is an enumeration type
 listing all the built-in symbols.
 \begin{spec}
--- defined in Kalkulu/Builtin.hs
+-- defined in src/Kalkulu/BuiltinSymbol.hs
 data BuiltinSymbol =
   Plus | Power | Times -- and many more builtin symbols
   deriving(Show)

@@ -18,7 +18,7 @@ import Data.Maybe (isJust, fromJust)
 import Control.Monad
 import Kalkulu.VectorPattern
 
-import qualified Kalkulu.Builtin as B
+import qualified Kalkulu.BuiltinSymbol as B
 import Kalkulu.Expression
 import Kalkulu.Kernel
 import Kalkulu.Symbol

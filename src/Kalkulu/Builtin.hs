@@ -1,77 +1,39 @@
-module Kalkulu.Builtin where
+module Kalkulu.Builtin(module Kalkulu.Expression,
+                       Kernel,
+                       Attribute(..),
+                       BuiltinCode(..),
+                       defaultBuiltin,
+                       toDefinition
+                       ) where
 
-import Data.Array (Ix)
+import Data.IORef
+import Kalkulu.Kernel (Kernel, Attribute(..))
+import qualified Kalkulu.Kernel as K
+import Kalkulu.Expression
+-- import qualified Kalkulu.BuiltinSymbol as B
+import qualified Data.Vector as V
 
-data BuiltinSymbol =
-    AddTo
-  | All
-  | Alternative
-  | And
-  | Apply
-  | Blank
-  | BlankNullSequence
-  | BlankSequence
-  | Condition
-  | Composition
-  | CompoundExpression
-  | Decrement
-  | Derivative
-  | DivideBy
-  | Dot
-  | Equal
-  | Evaluate
-  | Factorial
-  | Factorial2
-  | Function
-  | Get
-  | Greater
-  | GreaterEqual
-  | Hold
-  | Increment
-  | Inequality
-  | Less
-  | LessEqual
-  | List
-  | Map
-  | MapAll
-  | MessageName
-  | NonCommutativeMultiply
-  | Not
-  | Null
-  | Optional
-  | Or
-  | Out
-  | Part
-  | Pattern
-  | PatternTest
-  | Plus
-  | PreDecrement
-  | PreIncrement
-  | Power
-  | Put
-  | PutAppend
-  | Repeated
-  | ReplaceRepeated
-  | RepeatedNull
-  | ReplaceAll
-  | Rule
-  | RuleDelayed
-  | RuleRepeated
-  | SameQ
-  | Sequence
-  | Set
-  | SetDelayed
-  | Slot
-  | SlotSequence
-  | Span
-  | StringExpression
-  | StringJoin
-  | SubtractFrom
-  | Times
-  | TimesBy
-  | Unequal
-  | UnsameQ
-  | Unset
-  | UpSet
-  | UpSetDelayed
-  deriving (Bounded, Enum, Eq, Ix, Ord, Show)
+data BuiltinCode = BuiltinCode {
+  attributes :: [Attribute],
+  owncode    :: Maybe (Kernel Expression),
+  upcode     :: Maybe (Expression -> Kernel Expression),
+  subcode    :: Maybe (Expression -> Kernel Expression),
+  downcode   :: Maybe (V.Vector Expression -> Kernel Expression)
+  }
+
+defaultBuiltin :: BuiltinCode
+defaultBuiltin = BuiltinCode {
+  attributes = [],
+  owncode    = Nothing,
+  upcode     = Nothing,
+  subcode    = Nothing,
+  downcode   = Nothing
+  }
+
+toDefinition :: BuiltinCode -> IO K.Definition
+toDefinition code = K.Definition
+  <$> newIORef (attributes code)
+  <*> return (owncode code)
+  <*> return (upcode code)
+  <*> return (subcode code)
+  <*> return (downcode code)

@@ -14,7 +14,7 @@ import qualified Data.Vector
 import Text.ParserCombinators.Parsec hiding (space)
 
 import qualified Kalkulu.Expression as E
-import qualified Kalkulu.Builtin as B
+import qualified Kalkulu.BuiltinSymbol as B
 import Kalkulu.Kernel
 \end{code}
 

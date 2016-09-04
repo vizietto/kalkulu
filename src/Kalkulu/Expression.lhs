@@ -14,7 +14,7 @@ import Data.Monoid ((<>))
 import Data.List (intercalate)
 import qualified Data.Vector as V
 
-import qualified Kalkulu.Builtin as B
+import qualified Kalkulu.BuiltinSymbol as B
 import Kalkulu.Symbol
 import Kalkulu.VectorPattern
 \end{code}
