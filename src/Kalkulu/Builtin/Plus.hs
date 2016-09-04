@@ -1,17 +1,13 @@
-module Kalkulu.Builtin.Plus where
+{-# LANGUAGE OverloadedLists #-}
 
-import Kalkulu.Kernel
-import Kalkulu.Expression
-import Data.IORef
+module Kalkulu.Builtin.Plus(plus) where
+
+import Kalkulu.Builtin
+import Kalkulu.BuiltinSymbol as B
 import qualified Data.Vector as V
 
-def :: IO Definition
-def = Definition
-  <$> newIORef [Orderless, Protected]
-  <*> return Nothing
-  <*> return Nothing
-  <*> return Nothing
-  <*> return (Just downcodePlus)
-
-downcodePlus :: V.Vector Expression -> Kernel Expression
-downcodePlus = undefined
+plus :: BuiltinCode
+plus = defaultBuiltin {
+  attributes = [Flat, Listable, NumericFunction, OneIdentity,
+                Orderless, Protected]
+  }

@@ -8,6 +8,7 @@ import Kalkulu.BuiltinSymbol as B
 import Kalkulu.Builtin (toDefinition)
 import qualified Data.Vector.Mutable.Dynamic as MV
 import qualified Kalkulu.Builtin.If
+import qualified Kalkulu.Builtin.Plus
 import Kalkulu.Kernel
 
 defaultEnv :: IO Environment
@@ -23,4 +24,6 @@ defaultEnv = Environment
   where builtin :: IO [(B.BuiltinSymbol, Definition)]
         builtin = sequence [(,) b <$> def b | b <- [minBound..]]
         def B.If = toDefinition Kalkulu.Builtin.If.if_
+        def B.Plus = toDefinition Kalkulu.Builtin.Plus.plus
         def _    = emptyDef
+        

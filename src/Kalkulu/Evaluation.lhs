@@ -82,17 +82,15 @@ evalArgs h args = do
   hasHoldRest  <- h `hasAttribute` HoldRest
   case (hasHoldAll, hasHoldFirst, hasHoldRest) of
     (True, _, _) -> return args
-    (_, True, _) -> evalFirst args
-    (_, _, True) -> evalRest  args
+    (_, True, _) -> evalRest  args
+    (_, _, True) -> evalFirst args
     _            -> evalAll   args
   where
     evalFirst [] = return V.empty
-    evalFirst es = V.cons <$> (evaluate $ V.head es)
-                          <*> (pure $ V.tail es)
-    evalRest []  = return V.empty
-    evalRest es  = V.cons <$> (pure $ V.head es)
-                          <*> (V.mapM evaluate $ V.tail es)
-    evalAll      = V.mapM evaluate
+    evalFirst (hd :< t) = V.cons <$> (evaluate hd) <*> (pure t)
+    evalRest []         = return V.empty
+    evalRest (hd :< t)  = V.cons <$> (pure hd) <*> (V.mapM evaluate t)
+    evalAll          = V.mapM evaluate
 \end{code}
 However, one can force the evaluation of one argument with
 \verb?Evaluate?, as shown in the following snippet.
@@ -274,28 +272,27 @@ applySubcode e = case (superHead e) of
 \end{code}
 
 \section{The evaluation function}
-\begin{spec}
+\begin{code}
 -- False
 evaluate :: Expression -> Kernel Expression
 evaluate e = do
   -- put e in the trace
   e' <- eval e
   if e == e' then return e else evaluate e'
-\end{spec}
+\end{code}
 \begin{code}
-evaluate :: Expression -> Kernel Expression
-evaluate e = do
-  limit <- getIterationLimit
-  steps <- take' limit <$> (sequence $ iterate nextStep (return e))
-  return $ firstFixPoint steps
-  where nextStep = (>>= eval) -- TODO add trace
-        take' (Finite n) = take n
-        take' Infinity   = id
-        firstFixPoint [] = error "unreachable"
-        firstFixPoint [e1] = CmpB B.Hold (V.singleton e1)
-                             -- TODO sendMessage itlim
-        firstFixPoint (e1: es@(e2:_)) | e1 == e2  = e1
-                                      | otherwise = firstFixPoint es
+-- evaluate :: Expression -> Kernel Expression
+-- evaluate e = do
+--   limit <- getIterationLimit
+--   firstFixPoint <$> (take' limit <$> (sequence $ iterate nextStep (return e)))
+--   where nextStep = (>>= eval) -- TODO add trace
+--         take' (Finite n) = take n
+--         take' Infinity   = id
+--         firstFixPoint [] = error "unreachable"
+--         firstFixPoint [e1] = CmpB B.Hold (V.singleton e1)
+--                              -- TODO sendMessage itlim
+--         firstFixPoint (e1: es@(e2:_)) | e1 == e2  = e1
+--                                       | otherwise = firstFixPoint es
 
 eval :: Expression -> Kernel Expression
 eval (Cmp hd@(Cmp _ _) args) = do
@@ -308,7 +305,7 @@ eval (Cmp hd@(Symbol x) args) = do
   hd' <- evaluate hd
   if hd /= hd'
     then return (Cmp hd' args)
-    else do e' <- (Cmp hd') <$> (evalArgs x args)
+    else do e' <- (Cmp hd') <$> (processArgs x args)
             applyRules e'
 
 eval (Cmp hd args) = Cmp <$> (evaluate hd) <*> (V.mapM evaluate args)
