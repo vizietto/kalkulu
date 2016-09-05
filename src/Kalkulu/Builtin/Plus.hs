@@ -23,18 +23,25 @@ scalarExpr (CmpB B.Times [Number x, y])    = (x, y)
 scalarExpr (CmpB B.Times (Number x :< xs)) = (x, CmpB B.Times xs)
 scalarExpr e                               = (1, e)
 
+-- reciprocal function
+unscalarExpr :: (Integer, Expression) -> Expression
+unscalarExpr (x, Number 1) = Number x
+unscalarExpr (x, CmpB B.Times ys) = CmpB B.Times (V.cons (Number x) ys)
+unscalarExpr (x, y) = CmpB B.Times [Number x, y]
+
 addArgs :: [Expression] -> [Expression]
 addArgs [] = []
 addArgs [e] = [e]
 addArgs (e1 : e2 : es) = let (x1, e1') = scalarExpr e1
                              (x2, e2') = scalarExpr e2 in
-    if e1' == e2'
-      then addArgs $ (CmpB B.Times [Number (x1+x2), e1']) : es
-      else e1 : (addArgs (e2 : es))
+  if e1' == e2'
+    then addArgs $ (unscalarExpr (x1+x2, e1')) : es
+    else e1 : (addArgs (e2 : es))
                
 
 downcodePlus :: V.Vector Expression -> Expression
-downcodePlus args = case addArgs (V.toList args) of
-  []  -> Number 0
-  [e] -> e
-  es  -> CmpB B.Plus (V.fromList es)
+downcodePlus args = f $ addArgs $ V.toList args
+  where f [] = Number 0
+        f [e] = e
+        f ((Number 0) : es) = f es
+        f es = CmpB B.Plus (V.fromList es)
