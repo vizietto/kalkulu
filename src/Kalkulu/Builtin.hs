@@ -22,7 +22,7 @@ data BuiltinCode = BuiltinCode {
 
 defaultBuiltin :: BuiltinCode
 defaultBuiltin = BuiltinCode {
-  attributes = [],
+  attributes = [Protected],
   owncode    = Nothing,
   upcode     = return . id,
   subcode    = return . id,
