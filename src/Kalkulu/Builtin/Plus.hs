@@ -11,7 +11,7 @@ plus :: BuiltinCode
 plus = defaultBuiltin {
   attributes = [Flat, Listable, NumericFunction, OneIdentity,
                 Orderless, Protected],
-  downcode   = Just $ return . downcodePlus
+  downcode   = return . purePlus
   }
 
 -- Extract the "multiplicative constant" before a factor
@@ -39,8 +39,8 @@ addArgs (e1 : e2 : es) = let (x1, e1') = scalarExpr e1
     else e1 : (addArgs (e2 : es))
                
 
-downcodePlus :: V.Vector Expression -> Expression
-downcodePlus args = f $ addArgs $ V.toList args
+purePlus :: Expression -> Expression
+purePlus (Cmp _ args) = f $ addArgs $ V.toList args
   where f [] = Number 0
         f [e] = e
         f ((Number 0) : es) = f es

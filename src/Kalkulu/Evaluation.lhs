@@ -221,18 +221,14 @@ applyBuiltinRules = applyUpcode ==> applyDowncode
 applyUpcode :: Expression -> Kernel Expression
 applyUpcode e@(Cmp _ []) = return e
 applyUpcode e@(Cmp _ args) = do
-  upcodes <- V.mapM (getUpcode . superHead) args
+  upcodes <- V.mapM (getUpcode' . superHead) args
   foldl1 (==>) upcodes $ e
-  where getUpcode (Symbol s) = do
-          def <- getDef s
-          return $ maybe (return . id) id (upcode def)
-        getUpcode _ = return (return . id)
+  where getUpcode' (Symbol s) = getUpcode s
+        getUpcode' _          = return (return . id)
 applyUpcode _ = error "unreachable"
 
 applyDowncode :: Expression -> Kernel Expression
-applyDowncode e@(Cmp (Symbol x) args) =
-  getDowncode x >>= maybe (return e) ($ args)
-  where getDowncode symb = getDef symb >>= return . downcode
+applyDowncode e@(Cmp (Symbol x) args) = getDowncode x >>= ($ e)
 applyDowncode _ = error "unreachable"
 \end{code}
 
@@ -266,8 +262,7 @@ applySubValue = return . id -- TODO
 
 applySubcode :: Expression -> Kernel Expression
 applySubcode e = case (superHead e) of
-  Symbol s -> do def <- getDef s
-                 maybe (return e) ($ e) (subcode def)
+  Symbol s -> getSubcode s >>= ($ e)
   _        -> return e
 \end{code}
 

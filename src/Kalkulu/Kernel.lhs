@@ -11,8 +11,6 @@ header is
 
 module Kalkulu.Kernel where
 
-import qualified Data.Vector as V
-
 import Data.Array
 import Data.IORef
 import Data.List (intercalate, find)
@@ -62,15 +60,16 @@ data Attribute = Constant | Flat | HoldAll | HoldAllComplete | HoldFirst
 data Definition = Definition {
     attributes :: IORef [Attribute]
   , owncode    :: Maybe (Kernel Expression)
-  , upcode     :: Maybe (Expression -> Kernel Expression)
-  , subcode    :: Maybe (Expression -> Kernel Expression)
-  , downcode   :: Maybe (V.Vector Expression -> Kernel Expression)
+  , upcode     :: Expression -> Kernel Expression
+  , subcode    :: Expression -> Kernel Expression
+  , downcode   :: Expression -> Kernel Expression
   }
 
 emptyDef :: IO Definition
 emptyDef = do
   attr <- newIORef []
-  return $ Definition attr Nothing Nothing Nothing Nothing
+  return $ Definition attr Nothing noCode noCode noCode
+  where noCode = return . id
 
 data Infinitable a = Finite a | Infinity
 
@@ -94,6 +93,15 @@ getDef symb = do
   case symb of
     Builtin s        -> return $ (builtinDefs env) ! s
     UserSymbol i _ _ -> lift $ MV.read (defs env) i
+
+getUpcode :: Symbol -> Kernel (Expression -> Kernel Expression)
+getUpcode s = getDef s >>= return . upcode 
+
+getDowncode :: Symbol -> Kernel (Expression -> Kernel Expression)
+getDowncode s = getDef s >>= return . downcode
+
+getSubcode :: Symbol -> Kernel (Expression -> Kernel Expression)
+getSubcode s = getDef s >>= return . subcode
 
 getCurrentContext :: Kernel String
 getCurrentContext = ask >>= lift . readIORef . context

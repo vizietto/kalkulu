@@ -10,7 +10,7 @@ times :: BuiltinCode
 times = defaultBuiltin {
   attributes = [Flat, Listable, NumericFunction, OneIdentity,
                 Orderless, Protected],
-  downcode   = Just $ return . downcodeTimes
+  downcode   = return . pureTimes
   }
 
 baseExp :: Expression -> (Expression, Expression)
@@ -26,8 +26,8 @@ plus :: Expression -> Expression -> Expression
 plus (Number x) (Number y) = Number (x + y)
 plus x y = CmpB B.Plus [x, y]
 
-downcodeTimes :: V.Vector Expression -> Expression
-downcodeTimes args = case timesArgs (V.toList args) of
+pureTimes :: Expression -> Expression
+pureTimes (Cmp _ args) = case timesArgs (V.toList args) of
   []  -> Number 1
   [e] -> e
   (Number 0):es -> Number 0

@@ -11,23 +11,22 @@ import Kalkulu.Kernel (Kernel, Attribute(..))
 import qualified Kalkulu.Kernel as K
 import Kalkulu.Expression
 -- import qualified Kalkulu.BuiltinSymbol as B
-import qualified Data.Vector as V
 
 data BuiltinCode = BuiltinCode {
   attributes :: [Attribute],
   owncode    :: Maybe (Kernel Expression),
-  upcode     :: Maybe (Expression -> Kernel Expression),
-  subcode    :: Maybe (Expression -> Kernel Expression),
-  downcode   :: Maybe (V.Vector Expression -> Kernel Expression)
+  upcode     :: Expression -> Kernel Expression,
+  subcode    :: Expression -> Kernel Expression,
+  downcode   :: Expression -> Kernel Expression
   }
 
 defaultBuiltin :: BuiltinCode
 defaultBuiltin = BuiltinCode {
   attributes = [],
   owncode    = Nothing,
-  upcode     = Nothing,
-  subcode    = Nothing,
-  downcode   = Nothing
+  upcode     = return . id,
+  subcode    = return . id,
+  downcode   = return . id
   }
 
 toDefinition :: BuiltinCode -> IO K.Definition
