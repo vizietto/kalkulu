@@ -86,11 +86,11 @@ evalArgs h args = do
     (_, _, True) -> evalFirst args
     _            -> evalAll   args
   where
-    evalFirst [] = return V.empty
+    evalFirst []        = return V.empty
     evalFirst (hd :< t) = V.cons <$> (evaluate hd) <*> (pure t)
     evalRest []         = return V.empty
     evalRest (hd :< t)  = V.cons <$> (pure hd) <*> (V.mapM evaluate t)
-    evalAll          = V.mapM evaluate
+    evalAll             = V.mapM evaluate
 \end{code}
 However, one can force the evaluation of one argument with
 \verb?Evaluate?, as shown in the following snippet.
