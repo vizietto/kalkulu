@@ -5,7 +5,6 @@ module Kalkulu.Builtin.Times(times) where
 import Kalkulu.Builtin
 import Kalkulu.BuiltinSymbol as B
 import qualified Data.Vector as V
-import Kalkulu.VectorPattern
 
 times :: BuiltinCode
 times = defaultBuiltin {
@@ -37,6 +36,7 @@ downcodeTimes args = case timesArgs (V.toList args) of
 timesArgs :: [Expression] -> [Expression]
 timesArgs [] = []
 timesArgs [e] = [e]
+timesArgs (Number x : Number y : es) = timesArgs $ Number (x*y) : es
 timesArgs (e1:e2:es)
   | a1 == a2  = timesArgs $ (unBaseExp (a1, plus b1 b2)) : es
   | otherwise = e1 : (timesArgs (e2:es))
