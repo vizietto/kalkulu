@@ -31,6 +31,7 @@ data BuiltinSymbol =
   | If
   | Increment
   | Inequality
+  | Length
   | Less
   | LessEqual
   | List

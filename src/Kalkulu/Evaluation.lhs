@@ -228,7 +228,7 @@ applyUpcode e@(Cmp _ args) = do
 applyUpcode _ = error "unreachable"
 
 applyDowncode :: Expression -> Kernel Expression
-applyDowncode e@(Cmp (Symbol x) args) = getDowncode x >>= ($ e)
+applyDowncode e@(Cmp (Symbol x) _) = getDowncode x >>= ($ e)
 applyDowncode _ = error "unreachable"
 \end{code}
 

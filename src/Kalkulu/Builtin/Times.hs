@@ -30,7 +30,7 @@ pureTimes :: Expression -> Expression
 pureTimes (Cmp _ args) = case timesArgs (V.toList args) of
   []  -> Number 1
   [e] -> e
-  (Number 0):es -> Number 0
+  (Number 0):_ -> Number 0
   es  -> CmpB B.Times (V.fromList es)
 
 timesArgs :: [Expression] -> [Expression]

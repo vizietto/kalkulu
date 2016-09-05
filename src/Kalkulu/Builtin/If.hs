@@ -6,7 +6,6 @@ import Control.Monad
 
 import Kalkulu.Builtin
 import Kalkulu.BuiltinSymbol as B
-import qualified Data.Vector as V
 
 if_ :: BuiltinCode
 if_ = defaultBuiltin {
