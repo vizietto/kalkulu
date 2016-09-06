@@ -7,7 +7,7 @@
 This sections describes the module \inline{Kalkulu.Expression} whose
 header is
 \begin{code}
-{-# LANGUAGE PatternSynonyms, OverloadedLists #-}
+{-# LANGUAGE PatternSynonyms, OverloadedLists, FlexibleInstances #-}
 module Kalkulu.Expression where
 
 import Data.Monoid ((<>))
@@ -211,5 +211,29 @@ treated above.
 \begin{code}
 compareExpr (Cmp _ _) _         = GT
 compareExpr _         (Cmp _ _) = LT
+\end{code}
+
+\begin{code}
+class ToExpression a where
+  toExpression :: a -> Expression
+
+instance ToExpression Bool where
+  toExpression True  = SymbolB B.True
+  toExpression False = SymbolB B.False
+
+instance ToExpression Integer where
+  toExpression = Number
+
+instance ToExpression String where
+  toExpression = String
+
+instance ToExpression Expression where
+  toExpression = id
+
+instance ToExpression B.BuiltinSymbol where
+  toExpression = SymbolB
+
+instance ToExpression Symbol where
+  toExpression = Symbol
 \end{code}
 \end{document}
