@@ -34,6 +34,7 @@ data BuiltinSymbol =
   | Increment
   | Indeterminate
   | Inequality
+  | Integer
   | Length
   | Less
   | LessEqual
@@ -70,9 +71,11 @@ data BuiltinSymbol =
   | Slot
   | SlotSequence
   | Span
+  | String
   | StringExpression
   | StringJoin
   | SubtractFrom
+  | Symbol
   | Times
   | TimesBy
   | True

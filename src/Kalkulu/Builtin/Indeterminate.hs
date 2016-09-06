@@ -1,7 +1,7 @@
 module Kalkulu.Builtin.Indeterminate(indeterminate) where
 
 import Kalkulu.Builtin
-import Kalkulu.BuiltinSymbol as B
+import qualified Kalkulu.BuiltinSymbol as B
 
 indeterminate :: BuiltinCode
 indeterminate = defaultBuiltin {

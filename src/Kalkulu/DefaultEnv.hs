@@ -14,6 +14,7 @@ import qualified Kalkulu.Builtin.Indeterminate
 import qualified Kalkulu.Builtin.If
 import qualified Kalkulu.Builtin.Plus
 import qualified Kalkulu.Builtin.Times
+import qualified Kalkulu.Builtin.SameQ
 import qualified Kalkulu.Builtin.Length
 import Kalkulu.Kernel
 
@@ -36,4 +37,5 @@ defaultEnv = Environment
         def B.Length = toDefinition Kalkulu.Builtin.Length.length_
         def B.Plus = toDefinition Kalkulu.Builtin.Plus.plus
         def B.Times = toDefinition Kalkulu.Builtin.Times.times
+        def B.SameQ = toDefinition Kalkulu.Builtin.SameQ.sameQ
         def _    = emptyDef

@@ -16,6 +16,6 @@ downcodeLength e@(Cmp _ args) = do
   return $ pureLength e
 
 pureLength :: Expression -> Expression
-pureLength (Cmp _ [Cmp _ args]) = Number (toInteger $ length args)
-pureLength (Cmp _ [_])          = Number 0
+pureLength (Cmp _ [Cmp _ args]) = toExpression (length args)
+pureLength (Cmp _ [_])          = toExpression (0 :: Integer)
 pureLength e                    = e

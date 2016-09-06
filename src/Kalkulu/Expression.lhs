@@ -221,6 +221,9 @@ instance ToExpression Bool where
   toExpression True  = SymbolB B.True
   toExpression False = SymbolB B.False
 
+instance ToExpression Int where
+  toExpression = Number . toInteger
+
 instance ToExpression Integer where
   toExpression = Number
 

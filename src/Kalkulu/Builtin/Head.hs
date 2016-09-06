@@ -4,7 +4,7 @@ module Kalkulu.Builtin.Head(head_) where
 
 import Control.Monad (when)
 import Kalkulu.Builtin
-import Kalkulu.BuiltinSymbol as B
+import qualified Kalkulu.BuiltinSymbol as B
 
 head_ :: BuiltinCode
 head_  = defaultBuiltin {
