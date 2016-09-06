@@ -30,6 +30,7 @@ data BuiltinSymbol =
   | Hold
   | If
   | Increment
+  | Indeterminate
   | Inequality
   | Length
   | Less

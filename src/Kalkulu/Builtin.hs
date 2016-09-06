@@ -1,5 +1,5 @@
 module Kalkulu.Builtin(module Kalkulu.Expression,
-                       Kernel,
+                       module Kalkulu.Kernel,
                        Attribute(..),
                        BuiltinCode(..),
                        defaultBuiltin,
@@ -7,7 +7,8 @@ module Kalkulu.Builtin(module Kalkulu.Expression,
                        ) where
 
 import Data.IORef
-import Kalkulu.Kernel (Kernel, Attribute(..))
+import Kalkulu.Kernel hiding (attributes, owncode, upcode,
+                              subcode, downcode)
 import qualified Kalkulu.Kernel as K
 import Kalkulu.Expression
 -- import qualified Kalkulu.BuiltinSymbol as B

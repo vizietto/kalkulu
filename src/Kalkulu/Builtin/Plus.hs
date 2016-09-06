@@ -45,3 +45,4 @@ purePlus (Cmp _ args) = f $ addArgs $ V.toList args
         f [e] = e
         f ((Number 0) : es) = f es
         f es = CmpB B.Plus (V.fromList es)
+purePlus _ = error "unreachable"

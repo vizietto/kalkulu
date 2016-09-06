@@ -1,0 +1,17 @@
+module Kalkulu.Builtin.Indeterminate(indeterminate) where
+
+import Kalkulu.Builtin
+import Kalkulu.BuiltinSymbol as B
+
+indeterminate :: BuiltinCode
+indeterminate = defaultBuiltin {
+  upcode = upcodeIndeterminate
+  }
+
+upcodeIndeterminate :: Expression -> Kernel Expression
+upcodeIndeterminate e@(Cmp (Symbol s) _) = do
+  hasNumericFunction <- s `hasAttribute` NumericFunction
+  return $ if hasNumericFunction
+    then SymbolB B.Indeterminate
+    else e
+upcodeIndeterminate e = return e

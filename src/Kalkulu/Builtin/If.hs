@@ -17,6 +17,7 @@ downcodeIf :: Expression -> Kernel Expression
 downcodeIf e@(Cmp _ args) = do
   when (length args < 2 || length args > 4) (return ()) -- sendMessage
   return $ pureIf e
+downcodeIf _ = error "unreachable"
 
 pureIf :: Expression -> Expression
 pureIf (Cmp _ [SymbolB B.True, a])        = a

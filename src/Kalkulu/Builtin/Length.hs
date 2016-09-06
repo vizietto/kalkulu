@@ -3,7 +3,6 @@
 module Kalkulu.Builtin.Length(length_) where
 
 import Control.Monad
-
 import Kalkulu.Builtin
 
 length_ :: BuiltinCode
@@ -13,7 +12,7 @@ length_ = defaultBuiltin {
 
 downcodeLength :: Expression -> Kernel Expression
 downcodeLength e@(Cmp _ args) = do
-  when (length args /= 1) undefined -- TODO sendMessage
+  when (length args /= 1) undefined -- TODO: sendMessage
   return $ pureLength e
 
 pureLength :: Expression -> Expression
