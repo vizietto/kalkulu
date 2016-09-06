@@ -9,6 +9,7 @@ import Kalkulu.Builtin (toDefinition)
 import qualified Data.Vector.Mutable.Dynamic as MV
 
 import qualified Kalkulu.Builtin.AtomQ
+import qualified Kalkulu.Builtin.Head
 import qualified Kalkulu.Builtin.Indeterminate
 import qualified Kalkulu.Builtin.If
 import qualified Kalkulu.Builtin.Plus
@@ -29,10 +30,10 @@ defaultEnv = Environment
   where builtin :: IO [(B.BuiltinSymbol, Definition)]
         builtin = sequence [(,) b <$> def b | b <- [minBound..]]
         def B.AtomQ = toDefinition Kalkulu.Builtin.AtomQ.atomQ
+        def B.Head = toDefinition Kalkulu.Builtin.Head.head_
         def B.Indeterminate = toDefinition Kalkulu.Builtin.Indeterminate.indeterminate
         def B.If = toDefinition Kalkulu.Builtin.If.if_
         def B.Length = toDefinition Kalkulu.Builtin.Length.length_
         def B.Plus = toDefinition Kalkulu.Builtin.Plus.plus
         def B.Times = toDefinition Kalkulu.Builtin.Times.times
         def _    = emptyDef
-        

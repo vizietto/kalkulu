@@ -28,6 +28,7 @@ data BuiltinSymbol =
   | Get
   | Greater
   | GreaterEqual
+  | Head
   | Hold
   | If
   | Increment
