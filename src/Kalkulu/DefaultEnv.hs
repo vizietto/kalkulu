@@ -8,6 +8,7 @@ import Kalkulu.BuiltinSymbol as B
 import Kalkulu.Builtin (toDefinition)
 import qualified Data.Vector.Mutable.Dynamic as MV
 
+import qualified Kalkulu.Builtin.AtomQ
 import qualified Kalkulu.Builtin.Indeterminate
 import qualified Kalkulu.Builtin.If
 import qualified Kalkulu.Builtin.Plus
@@ -27,6 +28,7 @@ defaultEnv = Environment
   <*> (MV.new 0)
   where builtin :: IO [(B.BuiltinSymbol, Definition)]
         builtin = sequence [(,) b <$> def b | b <- [minBound..]]
+        def B.AtomQ = toDefinition Kalkulu.Builtin.AtomQ.atomQ
         def B.Indeterminate = toDefinition Kalkulu.Builtin.Indeterminate.indeterminate
         def B.If = toDefinition Kalkulu.Builtin.If.if_
         def B.Length = toDefinition Kalkulu.Builtin.Length.length_
