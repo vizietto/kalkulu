@@ -170,6 +170,11 @@ x `hasAttribute` att = do
   def <- getDef x
   atts <- lift $ readIORef (attributes def)
   return $ att `elem` atts
+
+getAttributes :: Symbol -> Kernel [Attribute]
+getAttributes x = do
+  def <- getDef x
+  lift $ readIORef (attributes def)
 \end{code}
 
 \end{document}

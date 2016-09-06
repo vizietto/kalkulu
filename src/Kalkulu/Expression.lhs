@@ -47,8 +47,10 @@ front-end...
 instance Show Expression where
   show (Number x) = show x
   show (String x) = show x
-  show (Symbol (Builtin x)) = "System`" ++ show x
-  show (Symbol (UserSymbol _ x y)) = y ++ x
+  show (Symbol (Builtin x)) = show x
+  show (Symbol (UserSymbol _ x _)) = x
+  show (CmpB B.List args) = "{" ++
+    (intercalate ", " $ V.toList (V.map show args)) ++ "}"
   show (Cmp h args) = show h ++ "[" ++
     (intercalate ", " $ V.toList (V.map show args)) ++ "]"
 \end{code}
@@ -238,5 +240,11 @@ instance ToExpression B.BuiltinSymbol where
 
 instance ToExpression Symbol where
   toExpression = Symbol
+
+instance ToExpression a => ToExpression [a] where
+  toExpression xs = CmpB B.List $ V.fromList (map toExpression xs)
+
+instance ToExpression a => ToExpression (V.Vector a) where
+  toExpression xs = CmpB B.List $ V.map toExpression xs
 \end{code}
 \end{document}

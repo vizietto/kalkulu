@@ -9,6 +9,7 @@ data BuiltinSymbol =
   | And
   | Apply
   | AtomQ
+  | Attributes
   | Blank
   | BlankNullSequence
   | BlankSequence
