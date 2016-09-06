@@ -13,6 +13,7 @@ data BuiltinSymbol =
   | BlankNullSequence
   | BlankSequence
   | Condition
+  | Constant
   | Composition
   | CompoundExpression
   | Decrement
@@ -24,12 +25,17 @@ data BuiltinSymbol =
   | Factorial
   | Factorial2
   | False
+  | Flat
   | Function
   | Get
   | Greater
   | GreaterEqual
   | Head
   | Hold
+  | HoldAll
+  | HoldAllComplete
+  | HoldFirst
+  | HoldRest
   | If
   | Increment
   | Indeterminate
@@ -39,14 +45,21 @@ data BuiltinSymbol =
   | Less
   | LessEqual
   | List
+  | Listable
+  | Locked
   | Map
   | MapAll
   | MessageName
+  | NHoldAll
+  | NHoldRest
   | NonCommutativeMultiply
   | Not
   | Null
+  | NumericFunction
+  | OneIdentity
   | Optional
   | Or
+  | Orderless
   | Out
   | Part
   | Pattern
@@ -54,6 +67,7 @@ data BuiltinSymbol =
   | Plus
   | PreDecrement
   | PreIncrement
+  | Protected
   | Power
   | Put
   | PutAppend
@@ -66,6 +80,7 @@ data BuiltinSymbol =
   | RuleRepeated
   | SameQ
   | Sequence
+  | SequenceHold
   | Set
   | SetDelayed
   | Slot
@@ -74,8 +89,10 @@ data BuiltinSymbol =
   | String
   | StringExpression
   | StringJoin
+  | Stub
   | SubtractFrom
   | Symbol
+  | Temporary
   | Times
   | TimesBy
   | True

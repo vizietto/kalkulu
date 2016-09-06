@@ -3,7 +3,7 @@
 module Kalkulu.Builtin.Times(times) where
 
 import Kalkulu.Builtin
-import Kalkulu.BuiltinSymbol as B
+import qualified Kalkulu.BuiltinSymbol as B
 import qualified Data.Vector as V
 
 times :: BuiltinCode

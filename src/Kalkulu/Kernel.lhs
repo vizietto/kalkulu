@@ -57,6 +57,25 @@ data Attribute = Constant | Flat | HoldAll | HoldAllComplete | HoldFirst
   | OneIdentity | Orderless | Protected | SequenceHold | Stub | Temporary
   deriving Eq
 
+instance ToExpression Attribute where
+  toExpression Constant        = SymbolB B.Constant
+  toExpression Flat            = SymbolB B.Flat
+  toExpression HoldAll         = SymbolB B.HoldAll
+  toExpression HoldAllComplete = SymbolB B.HoldAllComplete
+  toExpression HoldFirst       = SymbolB B.HoldFirst
+  toExpression HoldRest        = SymbolB B.HoldRest
+  toExpression Listable        = SymbolB B.Listable
+  toExpression Locked          = SymbolB B.Locked
+  toExpression NHoldAll        = SymbolB B.NHoldAll
+  toExpression NHoldRest       = SymbolB B.NHoldRest
+  toExpression NumericFunction = SymbolB B.NumericFunction
+  toExpression OneIdentity     = SymbolB B.OneIdentity
+  toExpression Orderless       = SymbolB B.Orderless
+  toExpression Protected       = SymbolB B.Protected
+  toExpression SequenceHold    = SymbolB B.SequenceHold
+  toExpression Stub            = SymbolB B.Stub
+  toExpression Temporary       = SymbolB B.Temporary
+
 data Definition = Definition {
     attributes :: IORef [Attribute]
   , owncode    :: Maybe (Kernel Expression)

@@ -5,7 +5,7 @@ module Kalkulu.Builtin.If(if_) where
 import Control.Monad
 
 import Kalkulu.Builtin
-import Kalkulu.BuiltinSymbol as B
+import qualified Kalkulu.BuiltinSymbol as B
 
 if_ :: BuiltinCode
 if_ = defaultBuiltin {
