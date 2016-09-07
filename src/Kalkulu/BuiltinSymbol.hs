@@ -36,6 +36,7 @@ data BuiltinSymbol =
   | HoldAll
   | HoldAllComplete
   | HoldFirst
+  | HoldPattern
   | HoldRest
   | If
   | Increment

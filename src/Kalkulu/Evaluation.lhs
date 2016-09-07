@@ -221,7 +221,7 @@ applyBuiltinRules = applyUpcode ==> applyDowncode
 applyUpcode :: Expression -> Kernel Expression
 applyUpcode e@(Cmp _ []) = return e
 applyUpcode e@(Cmp _ args) = do
-  upcodes <- V.mapM (getUpcode' . superHead) args
+  upcodes <- V.mapM (getUpcode' . getSuperHead) args
   foldl1 (==>) upcodes $ e
   where getUpcode' (Symbol s) = getUpcode s
         getUpcode' _          = return (return . id)
@@ -261,7 +261,7 @@ applySubValue :: Expression -> Kernel Expression
 applySubValue = return . id -- TODO
 
 applySubcode :: Expression -> Kernel Expression
-applySubcode e = case (superHead e) of
+applySubcode e = case (getSuperHead e) of
   Symbol s -> getSubcode s >>= ($ e)
   _        -> return e
 \end{code}

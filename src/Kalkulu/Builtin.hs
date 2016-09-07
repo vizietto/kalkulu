@@ -3,7 +3,8 @@ module Kalkulu.Builtin(module Kalkulu.Expression,
                        Attribute(..),
                        BuiltinCode(..),
                        defaultBuiltin,
-                       toDefinition
+                       toDefinition,
+                       evaluate
                        ) where
 
 import Data.IORef
@@ -11,6 +12,7 @@ import Kalkulu.Kernel hiding (attributes, owncode, upcode,
                               subcode, downcode)
 import qualified Kalkulu.Kernel as K
 import Kalkulu.Expression
+import Kalkulu.Evaluation (evaluate)
 -- import qualified Kalkulu.BuiltinSymbol as B
 
 data BuiltinCode = BuiltinCode {

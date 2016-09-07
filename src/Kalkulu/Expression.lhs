@@ -33,11 +33,26 @@ data Expression =
   | Cmp Expression (V.Vector Expression)
   deriving (Eq)
 \end{code}
-The leftmost atom in an expression is called its \emph{super head}.
+The first argument of the \inline{Cmp} constructor is the \emph{head}
+of the composite expression. The head of an atom is defined to be an
+abstract symbol representing its ``type''.
 \begin{code}
-superHead :: Expression -> Expression
-superHead (Cmp h _) = superHead h
-superHead expr      = expr
+getHead :: Expression -> Expression
+getHead (Cmp h _)  = h
+getHead (Number _) = Symbol (Builtin B.Integer)
+getHead (String _) = Symbol (Builtin B.String)
+getHead (Symbol _) = Symbol (Builtin B.Symbol)
+\end{code}
+Note that the pattern synonym \inline{SymbolB} of
+subsection~\ref{expr:subsec:patsyn} could have been used to simplify
+notations.
+
+A related notion is that of \emph{super head} of an expression, which
+is its leftmost atom.
+\begin{code}
+getSuperHead :: Expression -> Expression
+getSuperHead (Cmp h _) = getSuperHead h
+getSuperHead expr      = expr
 \end{code}
 Next we make \inline{Expression} an instance of the \inline{Show}
 typeclass. This is not strictly necessary, as the burden of printing
@@ -56,6 +71,7 @@ instance Show Expression where
 \end{code}
 
 \subsection{Pattern synonyms}
+\label{expr:subsec:patsyn}
 Pattern-matching built-in symbols will become a regular task, thus
 we useful pattern synonyms.
 \begin{code}
