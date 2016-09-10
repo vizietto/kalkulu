@@ -5,7 +5,7 @@ module Kalkulu.Builtin.SameQ(sameQ) where
 import Kalkulu.Builtin
 import Kalkulu.VectorPattern
 
-sameQ :: BuiltinCode
+sameQ :: BuiltinDefinition
 sameQ = defaultBuiltin { downcode = return . toExpression . pureSameQ }
 
 pureSameQ :: Expression -> Bool

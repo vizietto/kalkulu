@@ -7,19 +7,14 @@
 This chapter describes the module \inline{Kalkulu.Kernel}, whose
 header is
 \begin{code}
-{-# LANGUAGE OverloadedLists #-}
+{-# LANGUAGE DeriveFunctor, FlexibleInstances #-}
 
 module Kalkulu.Kernel where
 
-import Data.Array
-import Data.IORef
-import Data.List (intercalate, find)
+import Data.List (intercalate)
 import Data.List.Split (splitWhen)
-import qualified Data.Map as Map
-import Data.Maybe (isJust)
-import qualified Data.Vector.Mutable.Dynamic as MV
-import Control.Monad.Trans.Class
-import Control.Monad.Trans.Reader
+import Control.Monad.Identity
+import Control.Monad.Trans.Free
 
 import qualified Kalkulu.BuiltinSymbol as B
 import Kalkulu.Expression
@@ -55,126 +50,108 @@ easily combines a lot of functionalities, under which
 data Attribute = Constant | Flat | HoldAll | HoldAllComplete | HoldFirst
   | HoldRest | Listable | Locked | NHoldAll | NHoldRest | NumericFunction
   | OneIdentity | Orderless | Protected | SequenceHold | Stub | Temporary
-  deriving Eq
+  deriving (Bounded, Enum, Eq)
 
 instance ToExpression Attribute where
-  toExpression Constant        = SymbolB B.Constant
-  toExpression Flat            = SymbolB B.Flat
-  toExpression HoldAll         = SymbolB B.HoldAll
-  toExpression HoldAllComplete = SymbolB B.HoldAllComplete
-  toExpression HoldFirst       = SymbolB B.HoldFirst
-  toExpression HoldRest        = SymbolB B.HoldRest
-  toExpression Listable        = SymbolB B.Listable
-  toExpression Locked          = SymbolB B.Locked
-  toExpression NHoldAll        = SymbolB B.NHoldAll
-  toExpression NHoldRest       = SymbolB B.NHoldRest
-  toExpression NumericFunction = SymbolB B.NumericFunction
-  toExpression OneIdentity     = SymbolB B.OneIdentity
-  toExpression Orderless       = SymbolB B.Orderless
-  toExpression Protected       = SymbolB B.Protected
-  toExpression SequenceHold    = SymbolB B.SequenceHold
-  toExpression Stub            = SymbolB B.Stub
-  toExpression Temporary       = SymbolB B.Temporary
+  toExpression Constant        = toExpression B.Constant
+  toExpression Flat            = toExpression B.Flat
+  toExpression HoldAll         = toExpression B.HoldAll
+  toExpression HoldAllComplete = toExpression B.HoldAllComplete
+  toExpression HoldFirst       = toExpression B.HoldFirst
+  toExpression HoldRest        = toExpression B.HoldRest
+  toExpression Listable        = toExpression B.Listable
+  toExpression Locked          = toExpression B.Locked
+  toExpression NHoldAll        = toExpression B.NHoldAll
+  toExpression NHoldRest       = toExpression B.NHoldRest
+  toExpression NumericFunction = toExpression B.NumericFunction
+  toExpression OneIdentity     = toExpression B.OneIdentity
+  toExpression Orderless       = toExpression B.Orderless
+  toExpression Protected       = toExpression B.Protected
+  toExpression SequenceHold    = toExpression B.SequenceHold
+  toExpression Stub            = toExpression B.Stub
+  toExpression Temporary       = toExpression B.Temporary
 
-data Definition = Definition {
-    attributes :: IORef [Attribute]
-  , owncode    :: Maybe (Kernel Expression)
+data BuiltinCode = BuiltinCode {
+    owncode    :: Maybe (Kernel Expression)
   , upcode     :: Expression -> Kernel Expression
   , subcode    :: Expression -> Kernel Expression
   , downcode   :: Expression -> Kernel Expression
   }
 
-emptyDef :: IO Definition
-emptyDef = do
-  attr <- newIORef []
-  return $ Definition attr Nothing noCode noCode noCode
-  where noCode = return . id
+data Action a =
+    GetSymbolMaybe    ContextName SymbolName (Maybe Symbol -> a)
+  | CreateSymbol      ContextName SymbolName (Symbol -> a)
+  | GetBuiltinCode    Symbol (BuiltinCode -> a)
+  | HasAttribute      Symbol Attribute          (Bool -> a)
+  | GetIterationLimit (Maybe Int -> a)
+  | SetIterationLimit (Maybe Int) a
+  | GetRecursionLimit (Maybe Int -> a)
+  | SetRecursionLimit (Maybe Int) a
+  | GetCurrentContext (String -> a)
+  | GetContextPath    ([String] -> a)
+  deriving Functor
 
-data Infinitable a = Finite a | Infinity
+class Monad m => MonadEnv m where
+  getSymbolMaybe    :: ContextName -> SymbolName -> m (Maybe Symbol)
+  createSymbol      :: ContextName -> SymbolName -> m Symbol
+  getBuiltinCode    :: Symbol -> m BuiltinCode
+  hasAttribute      :: Symbol -> Attribute -> m Bool
+  getIterationLimit :: m (Maybe Int)
+  setIterationLimit :: Maybe Int -> m ()
+  getRecursionLimit :: m (Maybe Int)
+  setRecursionLimit :: Maybe Int -> m ()
+  getCurrentContext :: m String
+  getContextPath    :: m [String]
 
-data Environment = Environment {
-    iterationLimit :: IORef (Infinitable Int)
-  , recursionLimit :: IORef (Infinitable Int)
-  , context        :: IORef String
-  , contextPath    :: IORef [String]
-  , symbolTable    :: IORef (Map.Map (ContextName, SymbolName) Symbol)
-  , builtinDefs    :: Array B.BuiltinSymbol Definition
-  , defs           :: MV.IOVector Definition
-  }
+instance Monad m => MonadEnv (FreeT Action m) where
+  getSymbolMaybe c s  = liftF $ GetSymbolMaybe c s id
+  createSymbol c s    = liftF $ CreateSymbol c s id
+  getBuiltinCode s    = liftF $ GetBuiltinCode s id
+  hasAttribute s at   = liftF $ HasAttribute s at id
+  getIterationLimit   = liftF $ GetIterationLimit id
+  setIterationLimit l = liftF $ SetIterationLimit l ()
+  getRecursionLimit   = liftF $ GetRecursionLimit id
+  setRecursionLimit l = liftF $ SetRecursionLimit l ()
+  getCurrentContext   = liftF $ GetCurrentContext id
+  getContextPath      = liftF $ GetContextPath id
 
+type Kernel a = FreeT Action Identity a
 
+getAttributes :: MonadEnv m => Symbol -> m [Attribute]
+getAttributes s = filterM (s `hasAttribute`) allAttributes
+  where allAttributes = [minBound ..]
 
-type Kernel = ReaderT Environment IO
-
-getDef :: Symbol -> Kernel Definition
-getDef symb = do
-  env <- ask
-  case symb of
-    Builtin s        -> return $ (builtinDefs env) ! s
-    UserSymbol i _ _ -> lift $ MV.read (defs env) i
-
-getUpcode :: Symbol -> Kernel (Expression -> Kernel Expression)
-getUpcode s = getDef s >>= return . upcode 
-
-getDowncode :: Symbol -> Kernel (Expression -> Kernel Expression)
-getDowncode s = getDef s >>= return . downcode
-
-getSubcode :: Symbol -> Kernel (Expression -> Kernel Expression)
-getSubcode s = getDef s >>= return . subcode
-
-getCurrentContext :: Kernel String
-getCurrentContext = ask >>= lift . readIORef . context
-
--- Nothing means Infinity
-getIterationLimit :: Kernel (Infinitable Int)
-getIterationLimit = ask >>= lift . readIORef . iterationLimit
-
-getRecursionLimit :: Kernel (Infinitable Int)
-getRecursionLimit = ask >>= lift . readIORef . recursionLimit
-
-getContextPath :: Kernel [String]
-getContextPath = ask >>= lift . readIORef . contextPath
-
-getTotalName :: String -> Kernel (ContextName, SymbolName)
+getTotalName :: MonadEnv m => String -> m (ContextName, SymbolName)
 getTotalName ('`':name) = do current <- getCurrentContext
                              getTotalName (current ++ name)
 getTotalName name = case splitWhen (== '`') name of
   []  -> error "unreachable: void symbol name"
   [s] -> do path <- getContextPath
             current <- getCurrentContext
-            env <- ask
-            tbl <- lift $ readIORef (symbolTable env)
-            let c = find (\x -> isJust $ Map.lookup (x, s) tbl) path
-            return $ maybe (current, s) (flip (,) s) c
+            -- (\x -> isJust $ getSymbolMaybe x s) path
+            find' path s >>= (return . (maybe (current, s) (flip (,) s)))
   cs  -> return ((intercalate "`" (init cs)) ++ "`", last cs)
+  where find' [] _     = return Nothing
+        find' (c:cs) s = getSymbolMaybe c s >>=
+          maybe (find' cs s) (const $ return (Just c))
 
-getSymbol :: String -> Kernel Symbol
+getSymbol :: MonadEnv m => String -> m Symbol
 getSymbol name = do
   (c, s) <- getTotalName name
-  env <- ask
-  tbl <- lift $ readIORef (symbolTable env)
-  maybe (createSymbol (c, s)) return (Map.lookup (c, s) tbl)
+  -- TODO: send message if newsym or shadow
+  getSymbolMaybe c s >>= maybe (createSymbol c s) return
 
-createSymbol :: (ContextName, SymbolName) -> Kernel Symbol
-createSymbol (c, s) = do
-  env <- ask
-  let symbolDefs = defs env
-  idNumber <- lift $ MV.length symbolDefs
-  let symb = UserSymbol idNumber s c
-  (lift emptyDef) >>= MV.pushBack symbolDefs
-  lift $ modifyIORef (symbolTable env) (Map.insert (c, s) symb)
-  return symb
+getOwncode :: MonadEnv m => Symbol -> m (Maybe (Kernel Expression))
+getOwncode s = getBuiltinCode s >>= return . owncode
 
-hasAttribute :: Symbol -> Attribute -> Kernel Bool
-x `hasAttribute` att = do
-  def <- getDef x
-  atts <- lift $ readIORef (attributes def)
-  return $ att `elem` atts
+getUpcode :: MonadEnv m => Symbol -> m (Expression -> Kernel Expression)
+getUpcode s = getBuiltinCode s >>= return . upcode
 
-getAttributes :: Symbol -> Kernel [Attribute]
-getAttributes x = do
-  def <- getDef x
-  lift $ readIORef (attributes def)
+getDowncode :: MonadEnv m => Symbol -> m (Expression -> Kernel Expression)
+getDowncode s = getBuiltinCode s >>= return . downcode
+
+getSubcode :: MonadEnv m => Symbol -> m (Expression -> Kernel Expression)
+getSubcode s = getBuiltinCode s >>= return . subcode
 \end{code}
 
 \end{document}

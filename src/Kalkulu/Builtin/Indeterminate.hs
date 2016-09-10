@@ -3,7 +3,7 @@ module Kalkulu.Builtin.Indeterminate(indeterminate) where
 import Kalkulu.Builtin
 import qualified Kalkulu.BuiltinSymbol as B
 
-indeterminate :: BuiltinCode
+indeterminate :: BuiltinDefinition
 indeterminate = defaultBuiltin {
   upcode = upcodeIndeterminate
   }

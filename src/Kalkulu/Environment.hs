@@ -1,11 +1,12 @@
-module Kalkulu.DefaultEnv (defaultEnv) where
+module Kalkulu.Environment (defaultEnvironment,
+                            Environment) where
 
 import Data.IORef
 import qualified Data.Map as Map
 import Data.Array
 import Kalkulu.Symbol
 import Kalkulu.BuiltinSymbol as B
-import Kalkulu.Builtin (toDefinition)
+import qualified Kalkulu.Builtin as BD
 import qualified Data.Vector.Mutable.Dynamic as MV
 
 import qualified Kalkulu.Builtin.AtomQ
@@ -20,10 +21,36 @@ import qualified Kalkulu.Builtin.SameQ
 import qualified Kalkulu.Builtin.Length
 import Kalkulu.Kernel
 
-defaultEnv :: IO Environment
-defaultEnv = Environment
-  <$> newIORef (Finite 4096)          -- iteration limit
-  <*> newIORef (Finite 1024)          -- recursion limit
+data Environment = Environment {
+    iterationLimit :: IORef (Maybe Int)
+  , recursionLimit :: IORef (Maybe Int)
+  , context        :: IORef String
+  , contextPath    :: IORef [String]
+  , symbolTable    :: IORef (Map.Map (ContextName, SymbolName) Symbol)
+  , builtinDefs    :: Array B.BuiltinSymbol Definition
+  , defs           :: MV.IOVector Definition
+  }
+
+data Definition = Definition {
+    attributes  :: IORef [Attribute]
+  , builtincode :: BuiltinCode
+  }
+
+emptyDef :: IO Definition
+emptyDef = Definition
+  <$> newIORef []
+  <*> return (BuiltinCode Nothing (return . id) (return . id) (return . id))
+
+toDefinition :: BD.BuiltinDefinition -> IO Definition
+toDefinition code = Definition
+  <$> newIORef (BD.attributes code)
+  <*> return (BuiltinCode (BD.owncode code) (BD.upcode code)
+                          (BD.subcode code) (BD.downcode code))
+
+defaultEnvironment :: IO Environment
+defaultEnvironment = Environment
+  <$> newIORef (Just 4096)            -- iteration limit
+  <*> newIORef (Just 1024)            -- recursion limit
   <*> newIORef "Global`"              -- current context
   <*> newIORef ["System`", "Global`"] -- context path
   <*> newIORef (Map.fromList [(("System`", show b), Builtin b) -- symbolTable

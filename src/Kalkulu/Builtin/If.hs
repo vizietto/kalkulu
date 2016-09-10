@@ -7,7 +7,7 @@ import Control.Monad
 import Kalkulu.Builtin
 import qualified Kalkulu.BuiltinSymbol as B
 
-if_ :: BuiltinCode
+if_ :: BuiltinDefinition
 if_ = defaultBuiltin {
   attributes = [HoldRest, Protected],
   downcode   = downcodeIf

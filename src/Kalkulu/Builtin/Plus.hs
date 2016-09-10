@@ -7,7 +7,7 @@ import qualified Kalkulu.BuiltinSymbol as B
 import qualified Data.Vector as V
 import Kalkulu.VectorPattern
 
-plus :: BuiltinCode
+plus :: BuiltinDefinition
 plus = defaultBuiltin {
   attributes = [Flat, Listable, NumericFunction, OneIdentity,
                 Orderless, Protected],

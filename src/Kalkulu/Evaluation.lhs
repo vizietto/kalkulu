@@ -245,8 +245,8 @@ applyOwnValue = return . id -- TODO
 
 applyOwncode :: Expression -> Kernel Expression
 applyOwncode e@(Symbol s) = do
-  def <- getDef s
-  maybe (return e) id (owncode def)
+  own <- getOwncode s
+  maybe (return e) id own
 applyOwncode _ = error "unreachable"
 \end{code}
 

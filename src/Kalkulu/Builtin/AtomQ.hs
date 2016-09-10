@@ -6,7 +6,7 @@ import Control.Monad (when)
 import Kalkulu.Builtin
 import Kalkulu.BuiltinSymbol as B
 
-atomQ :: BuiltinCode
+atomQ :: BuiltinDefinition
 atomQ = defaultBuiltin {
   downcode   = downcodeAtomQ
   }

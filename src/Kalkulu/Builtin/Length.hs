@@ -5,7 +5,7 @@ module Kalkulu.Builtin.Length(length_) where
 import Control.Monad
 import Kalkulu.Builtin
 
-length_ :: BuiltinCode
+length_ :: BuiltinDefinition
 length_ = defaultBuiltin {
   downcode   = downcodeLength
   }

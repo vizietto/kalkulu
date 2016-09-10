@@ -7,13 +7,13 @@ import qualified Kalkulu.BuiltinSymbol as B
 import qualified Data.Vector as V
 import Kalkulu.VectorPattern
 
-true :: BuiltinCode
+true :: BuiltinDefinition
 true = defaultBuiltin { attributes = [Locked, Protected] }
 
-false :: BuiltinCode
+false :: BuiltinDefinition
 false = defaultBuiltin { attributes = [Locked, Protected] }
 
-and_ :: BuiltinCode
+and_ :: BuiltinDefinition
 and_ = defaultBuiltin {
   attributes = [Flat, HoldAll, OneIdentity, Protected],
   downcode   = downcodeAnd

@@ -6,7 +6,7 @@ import Kalkulu.Builtin
 import qualified Kalkulu.BuiltinSymbol as B
 import qualified Data.Vector as V
 
-times :: BuiltinCode
+times :: BuiltinDefinition
 times = defaultBuiltin {
   attributes = [Flat, Listable, NumericFunction, OneIdentity,
                 Orderless, Protected],

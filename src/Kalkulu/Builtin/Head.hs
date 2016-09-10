@@ -6,7 +6,7 @@ import Control.Monad (when)
 import Kalkulu.Builtin
 import qualified Kalkulu.BuiltinSymbol as B
 
-head_ :: BuiltinCode
+head_ :: BuiltinDefinition
 head_  = defaultBuiltin { downcode   = downcodeHead }
 
 downcodeHead :: Expression -> Kernel Expression
