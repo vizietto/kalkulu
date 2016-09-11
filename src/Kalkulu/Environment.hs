@@ -5,7 +5,9 @@ module Kalkulu.Environment (defaultEnvironment,
                             run) where
 
 import Control.Monad.Identity
+import Control.Monad.Trans
 import Control.Monad.Trans.Free
+import Control.Monad.Trans.Writer
 import Data.IORef
 import qualified Data.Map as Map
 import Data.Array
@@ -80,11 +82,13 @@ defaultEnvironment = Environment
         def _    = emptyDefinition
 
 run :: Environment -> Kernel a -> IO a
-run env action = case runIdentity (runFreeT action) of
+run env action =
+  let proceed = run env . lift in
+  case runIdentity $ runFreeT $ fmap fst $ runWriterT action of
   Pure x -> return x
   Free (GetSymbolMaybe c s next) -> do
     table <- readIORef (symbolTable env)
-    run env $ next $ Map.lookup (c, s) table
+    proceed $ next $ Map.lookup (c, s) table
   Free (CreateSymbol c s next) -> do
     identNumber <- readIORef (symbolNumber env)
     def <- emptyDefinition
@@ -92,34 +96,34 @@ run env action = case runIdentity (runFreeT action) of
     modifyIORef (defs env) (Map.insert identNumber def)
     modifyIORef (symbolTable env) (Map.insert (c, s) symb)
     modifyIORef (symbolNumber env) (+ 1)
-    run env $ next symb
+    proceed $ next symb
   Free (GetBuiltinCode (Builtin b) next) ->
-    run env $ next $ builtinCode (builtinDefs env ! b)
+    proceed $ next $ builtinCode (builtinDefs env ! b)
   Free (GetBuiltinCode _ next) ->
     let emptyBuiltinCode = BuiltinCode {
             owncode  = Nothing
           , upcode   = return . id
           , downcode = return . id
           , subcode  = return . id
-          } in run env $ next $ emptyBuiltinCode
+          } in proceed $ next $ emptyBuiltinCode
   Free (HasAttribute s at next) -> do
     def <- getDef env s
     attrs <- readIORef (attributes def)
-    run env $ next $ at `elem` attrs
+    proceed $ next $ at `elem` attrs
   Free (GetIterationLimit next) ->
-    readIORef (iterationLimit env) >>= run env . next
+    readIORef (iterationLimit env) >>= proceed . next
   Free (SetIterationLimit lim next) -> case lim of
     Just l | l < 20 -> error "Attempt to set $IterationLimit under 20"
-    _ -> writeIORef (iterationLimit env) lim >> run env next
+    _ -> writeIORef (iterationLimit env) lim >> proceed next
   Free (GetRecursionLimit next) ->
-    readIORef (recursionLimit env) >>= run env . next
+    readIORef (recursionLimit env) >>= proceed . next
   Free (SetRecursionLimit lim next) -> case lim of
     Just l | l < 20 -> error "Attempt to set $RecursionLimit under 20"
-    _ -> writeIORef (recursionLimit env) lim >> run env next
+    _ -> writeIORef (recursionLimit env) lim >> proceed next
   Free (GetCurrentContext next) ->
-    readIORef (context env) >>= run env . next
+    readIORef (context env) >>= proceed . next
   Free (GetContextPath next) ->
-    readIORef (contextPath env) >>= run env . next
+    readIORef (contextPath env) >>= proceed . next
   -- _ -> undefined
 
 getDef :: Environment -> Symbol -> IO Definition

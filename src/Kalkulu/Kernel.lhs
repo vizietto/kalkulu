@@ -14,7 +14,9 @@ module Kalkulu.Kernel where
 import Data.List (intercalate)
 import Data.List.Split (splitWhen)
 import Control.Monad.Identity
+import Control.Monad.Trans
 import Control.Monad.Trans.Free
+import Control.Monad.Trans.Writer
 
 import qualified Kalkulu.BuiltinSymbol as B
 import Kalkulu.Expression
@@ -103,6 +105,18 @@ class Monad m => MonadEnv m where
   getCurrentContext :: m String
   getContextPath    :: m [String]
 
+instance (MonadEnv m, Monoid w) => MonadEnv (WriterT w m) where
+  getSymbolMaybe c s = lift $ getSymbolMaybe c s
+  createSymbol   c s = lift $ createSymbol c s
+  getBuiltinCode     = lift . getBuiltinCode
+  hasAttribute s a   = lift $ hasAttribute s a
+  getIterationLimit  = lift getIterationLimit
+  setIterationLimit  = lift . setIterationLimit
+  getRecursionLimit  = lift getRecursionLimit
+  setRecursionLimit  = lift . setRecursionLimit
+  getCurrentContext  = lift getCurrentContext
+  getContextPath     = lift getContextPath
+
 instance Monad m => MonadEnv (FreeT Action m) where
   getSymbolMaybe c s  = liftF $ GetSymbolMaybe c s id
   createSymbol c s    = liftF $ CreateSymbol c s id
@@ -114,8 +128,6 @@ instance Monad m => MonadEnv (FreeT Action m) where
   setRecursionLimit l = liftF $ SetRecursionLimit l ()
   getCurrentContext   = liftF $ GetCurrentContext id
   getContextPath      = liftF $ GetContextPath id
-
-type Kernel a = FreeT Action Identity a
 
 getAttributes :: MonadEnv m => Symbol -> m [Attribute]
 getAttributes s = filterM (s `hasAttribute`) allAttributes
@@ -152,6 +164,20 @@ getDowncode s = getBuiltinCode s >>= return . downcode
 
 getSubcode :: MonadEnv m => Symbol -> m (Expression -> Kernel Expression)
 getSubcode s = getBuiltinCode s >>= return . subcode
+\end{code}
+
+\section{Evaluation trace}
+
+\begin{code}
+data LogExpression = LogItem     Expression
+                   | LogSequence [LogExpression]
+
+pack :: [LogExpression] -> [LogExpression]
+pack s = [LogSequence s]
+
+type Kernel a = WriterT [LogExpression] (FreeT Action Identity) a
+
+
 \end{code}
 
 \end{document}
