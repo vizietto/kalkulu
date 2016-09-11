@@ -4,11 +4,8 @@ import Kalkulu.Parser
 -- import Kalkulu.Pattern
 import Kalkulu.Evaluation (evaluate)
 import Kalkulu.Environment
-import Kalkulu.Kernel
 import Text.ParserCombinators.Parsec
-import Control.Monad.Identity
 import Control.Monad.Trans
-import Control.Monad.Trans.Free
 import System.Console.Haskeline
 import Data.Maybe (fromJust)
 
@@ -25,8 +22,3 @@ main = do
                 e' <- run env $ evaluate e
                 print e'
           loop env
-        
-run :: Environment -> Kernel a -> IO a
-run env action = case runIdentity (runFreeT action) of
-  Pure x -> return x
-  _ -> undefined

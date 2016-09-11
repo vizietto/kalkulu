@@ -1,13 +1,17 @@
 module Kalkulu.Environment (defaultEnvironment,
-                            Environment) where
+                            Environment(..),
+                            Definition(..),
+                            emptyDefinition,
+                            run) where
 
+import Control.Monad.Identity
+import Control.Monad.Trans.Free
 import Data.IORef
 import qualified Data.Map as Map
 import Data.Array
 import Kalkulu.Symbol
 import Kalkulu.BuiltinSymbol as B
 import qualified Kalkulu.Builtin as BD
-import qualified Data.Vector.Mutable.Dynamic as MV
 
 import qualified Kalkulu.Builtin.AtomQ
 import qualified Kalkulu.Builtin.Attributes
@@ -22,22 +26,23 @@ import qualified Kalkulu.Builtin.Length
 import Kalkulu.Kernel
 
 data Environment = Environment {
-    iterationLimit :: IORef (Maybe Int)
+    symbolNumber   :: IORef Int
+  , iterationLimit :: IORef (Maybe Int)
   , recursionLimit :: IORef (Maybe Int)
   , context        :: IORef String
   , contextPath    :: IORef [String]
   , symbolTable    :: IORef (Map.Map (ContextName, SymbolName) Symbol)
   , builtinDefs    :: Array B.BuiltinSymbol Definition
-  , defs           :: MV.IOVector Definition
+  , defs           :: IORef (Map.Map SymbolId Definition)
   }
 
 data Definition = Definition {
     attributes  :: IORef [Attribute]
-  , builtincode :: BuiltinCode
+  , builtinCode :: BuiltinCode
   }
 
-emptyDef :: IO Definition
-emptyDef = Definition
+emptyDefinition :: IO Definition
+emptyDefinition = Definition
   <$> newIORef []
   <*> return (BuiltinCode Nothing (return . id) (return . id) (return . id))
 
@@ -49,14 +54,15 @@ toDefinition code = Definition
 
 defaultEnvironment :: IO Environment
 defaultEnvironment = Environment
-  <$> newIORef (Just 4096)            -- iteration limit
+  <$> newIORef 0                      -- symbolNumber
+  <*> newIORef (Just 4096)            -- iteration limit
   <*> newIORef (Just 1024)            -- recursion limit
   <*> newIORef "Global`"              -- current context
   <*> newIORef ["System`", "Global`"] -- context path
   <*> newIORef (Map.fromList [(("System`", show b), Builtin b) -- symbolTable
                                             | b <- [minBound..]])
   <*> (array (minBound, maxBound) <$> builtin)
-  <*> (MV.new 0)
+  <*> newIORef Map.empty
   where builtin :: IO [(B.BuiltinSymbol, Definition)]
         builtin = sequence [(,) b <$> def b | b <- [minBound..]]
         def B.And = toDefinition Kalkulu.Builtin.Logic.and_
@@ -71,4 +77,53 @@ defaultEnvironment = Environment
         def B.Times = toDefinition Kalkulu.Builtin.Times.times
         def B.True = toDefinition Kalkulu.Builtin.Logic.true
         def B.SameQ = toDefinition Kalkulu.Builtin.SameQ.sameQ
-        def _    = emptyDef
+        def _    = emptyDefinition
+
+run :: Environment -> Kernel a -> IO a
+run env action = case runIdentity (runFreeT action) of
+  Pure x -> return x
+  Free (GetSymbolMaybe c s next) -> do
+    table <- readIORef (symbolTable env)
+    run env $ next $ Map.lookup (c, s) table
+  Free (CreateSymbol c s next) -> do
+    identNumber <- readIORef (symbolNumber env)
+    def <- emptyDefinition
+    let symb = UserSymbol identNumber s c
+    modifyIORef (defs env) (Map.insert identNumber def)
+    modifyIORef (symbolTable env) (Map.insert (c, s) symb)
+    modifyIORef (symbolNumber env) (+ 1)
+    run env $ next symb
+  Free (GetBuiltinCode (Builtin b) next) ->
+    run env $ next $ builtinCode (builtinDefs env ! b)
+  Free (GetBuiltinCode _ next) ->
+    let emptyBuiltinCode = BuiltinCode {
+            owncode  = Nothing
+          , upcode   = return . id
+          , downcode = return . id
+          , subcode  = return . id
+          } in run env $ next $ emptyBuiltinCode
+  Free (HasAttribute s at next) -> do
+    def <- getDef env s
+    attrs <- readIORef (attributes def)
+    run env $ next $ at `elem` attrs
+  Free (GetIterationLimit next) ->
+    readIORef (iterationLimit env) >>= run env . next
+  Free (SetIterationLimit lim next) -> case lim of
+    Just l | l < 20 -> error "Attempt to set $IterationLimit under 20"
+    _ -> writeIORef (iterationLimit env) lim >> run env next
+  Free (GetRecursionLimit next) ->
+    readIORef (recursionLimit env) >>= run env . next
+  Free (SetRecursionLimit lim next) -> case lim of
+    Just l | l < 20 -> error "Attempt to set $RecursionLimit under 20"
+    _ -> writeIORef (recursionLimit env) lim >> run env next
+  Free (GetCurrentContext next) ->
+    readIORef (context env) >>= run env . next
+  Free (GetContextPath next) ->
+    readIORef (contextPath env) >>= run env . next
+  -- _ -> undefined
+
+getDef :: Environment -> Symbol -> IO Definition
+getDef env (Builtin b) = return $ (builtinDefs env) ! b
+getDef env (UserSymbol i _ _) = do
+  definitions <- readIORef (defs env)
+  maybe emptyDefinition return (Map.lookup i definitions)
