@@ -16,7 +16,9 @@ import qualified Kalkulu.BuiltinSymbol as B
 import qualified Data.Vector as V
 \end{code}
 
-\section{Representation of patterns}
+\section{Patterns}
+
+\subsection{Representation of patterns}
 
 In \emph{Kalkulu}, any object is necessarily represented by an
 expression. This holds in particular for patterns, which are special
@@ -83,6 +85,8 @@ instance ToExpression Pattern where
     CmpB B.Pattern [toExpression s, toExpression p]
   toExpression (Alternative es) =
     CmpB B.Alternative (V.fromList $ map toExpression es)
+  toExpression (PatternCmp h as) =
+    Cmp (toExpression h) (V.fromList $ map toExpression as)
   toExpression (Expression e) = e -- TODO: add Verbatim
 \end{code}
 
@@ -99,7 +103,9 @@ Out[1]= True
 In[2]:= MatchQ[a+b, A+_]
 Out[2]= False
 \end{verbatim}
-One can be more precise by exhibiting the relevant bindings
+One can be more precise by exhibiting the relevant bindings when a
+pattern matches an expression.
+
 \begin{table}[!h]
   \centering
   \begin{tabular}{c|c|c}
@@ -115,6 +121,7 @@ One can be more precise by exhibiting the relevant bindings
   \caption{Some examples of pattern matching}
   \label{pat:tab:examples}
 \end{table}
+
 Table~\ref{pat:tab:examples} teaches us some interesting facts. First,
 it is natural to design a recursive pattern matcher, because patterns
 can be nested arbitrarily deep. But cases 2 and 3 show that it is then
@@ -137,55 +144,106 @@ information concerning the underlying symbol head.
     & \verb?f[x_]? & \verb?[(x, f[a])]? & \verb?f? is \verb?Flat? \\
     & \verb?f[x_]? & \verb?[(x, a)]? & \verb?f? is \verb?Flat? and
     \verb?OneIdentity? \\
-    & \verb?f[x__]? & \verb?[(x, Sequence[a])]? & $\emptyset$ \\
-    & \verb?f[x___]? & \verb?[(x, Sequence[a])]? & $\emptyset$ \\
+    & \verb?f[x__]? & \verb?[(x, a)]? & $\emptyset$ \\
+    & \verb?f[x___]? & \verb?[(x, a)]? & $\emptyset$ \\
   \end{tabular}
   \caption{Pattern matching with expression \texttt{f[a]}}
   \label{pat:tab:binding}
 \end{table}
+\section{Bindings}
+The pattern \verb?f[x_]? matches the expression \verb?f[a]? and binds
+the \emph{symbol} \verb?x? to the \emph{expression} \verb?a?. More
+generally, symbols can be bound to either expressions or sequence of
+expressions. For that, we introduce the type
+\inline{BoundExpression}.
 \begin{code}
-type Association = [(Symbol, Expression)]
-
--- f Flat
--- MatchQ[f[], f[z_]]          ===> False
--- MatchQ[f[x, y], f[z_]]      ===> True (binding x -> Sequence[x, y]
-
--- req: required bindings
-findMatches :: [Expression] -> [Pattern] -> (Maybe Symbol) -> [Association] -> Kernel [Association]
-findMatches [] [] _ req = return req
-findMatches _  [] _ req = return []
--- Matching with _
-findMatches []  [Blank] _ _          = return []  
-findMatches [e] [Blank] _ req        = return req
-findMatches _   [Blank] Nothing _    = return []
-findMatches _   [Blank] (Just s) req = do
-  hasFlat <- s `hasAttribute` Flat
-  return $ if hasFlat then req else []
-findMatches []  [HeadedBlank _] _ _   = return []
-findMatches [e] [HeadedBlank h] _ req
-  | getHead e == h = return req
-  | otherwise      = return []
-findMatches _   [HeadedBlank _] Nothing _    = return []
-findMatches es  [HeadedBlank h] (Just s) req = do
-  hasFlat <- s `hasAttribute` Flat
-  return $ if hasFlat && all (== h) (map getHead es) then req else []
--- Matching with __
-findMatches [] [BlankSequence] _ _                  = return []
-findMatches _  [BlankSequence] _ req                = return req
-findMatches [] [HeadedBlankSequence _] _ _          = return []
-findMatches es [HeadedBlankSequence h] (Just s) req = do
-  hasFlat <- s `hasAttribute` Flat
-  return $ if hasFlat && all (== h) (map getHead es) then req else []
--- Matching with ___
-findMatches _  [BlankNullSequence] _ req         = return req
-findMatches es [HeadedBlankNullSequence h] _ req =
-  return $ if all (== h) (map getHead es) then req else []
--- Matching with Pattern[s, p]
-findMatches es [Pattern s p] lhs req = do
-  matches <- findMatches es [p] lhs req
-  return undefined
-              
-       
+data BoundExpression = Unique Expression
+                     | Sequence [Expression]
 \end{code}
+Several symbols can be bound to \inline{BoundExpression}s. The result
+of pattern matching is an association list.
+\begin{code}
+type Bindings = [(Symbol, BoundExpression)]
+\end{code}
+The pattern matcher is based on two mutually recursive functions,
+\inline{match} and \inline{matchMany}, which respectively match a single
+pattern or a list of patterns against a list of expressions.
+\begin{spec}
+match ::  [Expression] -> Pattern -> Maybe Symbol
+                       -> Bindings -> Kernel [(Bindings, BoundExpression)]
+\end{spec}
+The third argument of type \inline{Maybe Symbol} is the preexisting
+head (if it exists). For example, matching \verb?f[x_]? against
+\verb?f[expr1, expr2]? eventually calls \inline{match} with the
+arguments \verb?[expr1, expr2]?, \verb?x_? and \inline{Just f}.
+The fourth argument of type \inline{Bindings} represents a set of
+\emph{required} bindings, which have to be respected. Finally, the
+result lies in the \inline{Kernel} monad (because we need to check
+the attributes of the underlying head). Because of the non determinism,
+we return a \emph{list} of \inline{(Bindings, BoundExpression)}, where
+the first element of type \inline{Bindings} represents the new bindings,
+and the second element is the expression bound to the pattern.
+
+The second function has the following signature.
+\begin{spec}
+matchMany :: [Expression] -> [Pattern] -> Maybe Symbol
+                                       -> Bindings -> Kernel [Bindings] 
+\end{spec}
+
+\section{The pattern matcher}
+First, we match a list of expressions with the pattern \verb?_?.  A
+\verb?_? cannot match an empty expression sequence. To denote failure,
+we return an empty list.
+\begin{code}
+match :: [Expression] -> Pattern -> Maybe Symbol -> Bindings
+                                 -> Kernel [(Bindings, BoundExpression)]
+match [] Blank _ _ = return []
+match [e] Blank (Just s) req = do
+  hasFlat <- s `hasAttribute` Flat
+  hasOneIdentity <- s `hasAttribute` OneIdentity
+  return $ if hasFlat && not hasOneIdentity
+    then [(req, Unique (Cmp (Symbol s) [e]))]
+    else [(req, Unique e)]
+match [e] Blank Nothing req = return [(req, Unique e)]
+match es Blank (Just s) req = do
+  hasFlat <- s `hasAttribute` Flat
+  return $ if hasFlat
+    then [(req, Unique (Cmp (Symbol s) (V.fromList es)))]
+    else []
+\end{code}
+
+\begin{code}
+\end{code}
+
+%findMatches []  [Blank] _ _          = return []  
+%findMatches [e] [Blank] _ req        = return req
+%findMatches _   [Blank] Nothing _    = return []
+%findMatches _   [Blank] (Just s) req = do
+%  hasFlat <- s `hasAttribute` Flat
+%  return $ if hasFlat then req else []
+%findMatches []  [HeadedBlank _] _ _   = return []
+%findMatches [e] [HeadedBlank h] _ req
+%  | getHead e == h = return req
+%  | otherwise      = return []
+%findMatches _   [HeadedBlank _] Nothing _    = return []
+%findMatches es  [HeadedBlank h] (Just s) req = do
+%  hasFlat <- s `hasAttribute` Flat
+%  return $ if hasFlat && all (== h) (map getHead es) then req else []
+%-- Matching with __
+%findMatches [] [BlankSequence] _ _                  = return []
+%findMatches _  [BlankSequence] _ req                = return req
+%findMatches [] [HeadedBlankSequence _] _ _          = return []
+%findMatches es [HeadedBlankSequence h] (Just s) req = do
+%  hasFlat <- s `hasAttribute` Flat
+%  return $ if hasFlat && all (== h) (map getHead es) then req else []
+%-- Matching with ___
+%findMatches _  [BlankNullSequence] _ req         = return req
+%findMatches es [HeadedBlankNullSequence h] _ req =
+%  return $ if all (== h) (map getHead es) then req else []
+%-- Matching with Pattern[s, p]
+%findMatches es [Pattern s p] lhs req = do
+%  matches <- findMatches es [p] lhs req
+%  return undefined
+%\end{code}
 
 \end{document}
