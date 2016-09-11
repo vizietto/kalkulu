@@ -177,6 +177,11 @@ pack s = [LogSequence s]
 
 type Kernel a = WriterT [LogExpression] (FreeT Action Identity) a
 
+newtype RecursionLevel = RecursionLevel Int
+
+instance Monoid RecursionLevel where
+  mempty = RecursionLevel 0
+  (RecursionLevel n) `mappend` (RecursionLevel m) = RecursionLevel (n+m)
 
 \end{code}
 
