@@ -29,10 +29,12 @@ plus x y = CmpB B.Plus [x, y]
 
 pureTimes :: Expression -> Expression
 pureTimes (Cmp _ args) = case timesArgs (V.toList args) of
-  []  -> Number 1
-  [e] -> e
-  (Number 0):_ -> Number 0 -- TODO: 0*Infinity, 0*ComplexInfinity, etc.
-  es  -> CmpB B.Times (V.fromList es)
+  []            -> Number 1
+  [e]           -> e
+  (Number 0):_  -> Number 0 -- TODO: 0*Infinity, 0*ComplexInfinity
+  [Number 1, e] -> e
+  (Number 1):es -> CmpB B.Times (V.fromList es)
+  es            -> CmpB B.Times (V.fromList es)
 pureTimes _ = error "unreachable"
 
 timesArgs :: [Expression] -> [Expression]
