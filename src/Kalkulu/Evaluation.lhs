@@ -267,27 +267,27 @@ applySubcode e = case (getSuperHead e) of
 \end{code}
 
 \section{The evaluation function}
-\begin{code}
+\begin{spec}
 -- False
 evaluate :: Expression -> Kernel Expression
 evaluate e = do
   -- put e in the trace
   e' <- eval e
   if e == e' then return e else evaluate e'
-\end{code}
+\end{spec}
 \begin{code}
--- evaluate :: Expression -> Kernel Expression
--- evaluate e = do
---   limit <- getIterationLimit
---   firstFixPoint <$> (take' limit <$> (sequence $ iterate nextStep (return e)))
---   where nextStep = (>>= eval) -- TODO add trace
---         take' (Finite n) = take n
---         take' Infinity   = id
---         firstFixPoint [] = error "unreachable"
---         firstFixPoint [e1] = CmpB B.Hold (V.singleton e1)
---                              -- TODO sendMessage itlim
---         firstFixPoint (e1: es@(e2:_)) | e1 == e2  = e1
---                                       | otherwise = firstFixPoint es
+-- TODO: send Message if IterationLimit or RecursionLimit
+-- TODO: trace evaluation
+evaluate :: Expression -> Kernel Expression
+evaluate e = do
+  limit <- getIterationLimit
+  repeatEval limit e
+  where repeatEval :: Maybe Int -> Expression -> Kernel Expression
+        repeatEval (Just 0) e = return $ CmpB B.Hold [e]
+        repeatEval n e = do
+          e' <- eval e
+          if e == e' then return e
+                     else repeatEval (n >>= return . (+ 1)) e'
 
 eval :: Expression -> Kernel Expression
 eval (Cmp hd@(Cmp _ _) args) = do
