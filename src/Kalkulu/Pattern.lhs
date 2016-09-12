@@ -13,6 +13,7 @@ import Kalkulu.Expression
 import Kalkulu.Kernel
 import Kalkulu.Symbol
 import qualified Kalkulu.BuiltinSymbol as B
+import Control.Monad.Extra
 import qualified Data.Vector as V
 \end{code}
 
@@ -144,8 +145,8 @@ information concerning the underlying symbol head.
     & \verb?f[x_]? & \verb?[(x, f[a])]? & \verb?f? is \verb?Flat? \\
     & \verb?f[x_]? & \verb?[(x, a)]? & \verb?f? is \verb?Flat? and
     \verb?OneIdentity? \\
-    & \verb?f[x__]? & \verb?[(x, a)]? & $\emptyset$ \\
-    & \verb?f[x___]? & \verb?[(x, a)]? & $\emptyset$ \\
+    & \verb?f[x__]? & \verb?[(x, Sequence[a])]? & $\emptyset$ \\
+    & \verb?f[x___]? & \verb?[(x, Sequence[a])]? & $\emptyset$ \\
   \end{tabular}
   \caption{Pattern matching with expression \texttt{f[a]}}
   \label{pat:tab:binding}
@@ -213,37 +214,60 @@ match es Blank (Just s) req = do
 \end{code}
 
 \begin{code}
+match []  (HeadedBlank _) _ _ = return []
+match [e] (HeadedBlank h) (Just s) req = do
+  hasFlat <- s `hasAttribute` Flat
+  hasOneIdentity <- s `hasAttribute` OneIdentity
+  let h' = Symbol s
+  return $ case hasFlat && not hasOneIdentity of
+    True  -> if getHead e == h' then [(req, Unique (Cmp h' [e]))] else []
+    False -> if getHead e == h then [(req, Unique e)] else []
+match [e] (HeadedBlank h) Nothing req
+  | getHead e == h = return [(req, Unique e)]
+  | otherwise      = return []
+match es (HeadedBlank h) (Just s) req = do
+  hasFlat <- s `hasAttribute` Flat
+  let h' = Symbol s
+  return $ if hasFlat && h == h'
+    then [(req, Unique (Cmp h' (V.fromList es)))]
+    else []
+match _ (HeadedBlank _) Nothing _ = return []
 \end{code}
 
-%findMatches []  [Blank] _ _          = return []  
-%findMatches [e] [Blank] _ req        = return req
-%findMatches _   [Blank] Nothing _    = return []
-%findMatches _   [Blank] (Just s) req = do
-%  hasFlat <- s `hasAttribute` Flat
-%  return $ if hasFlat then req else []
-%findMatches []  [HeadedBlank _] _ _   = return []
-%findMatches [e] [HeadedBlank h] _ req
-%  | getHead e == h = return req
-%  | otherwise      = return []
-%findMatches _   [HeadedBlank _] Nothing _    = return []
-%findMatches es  [HeadedBlank h] (Just s) req = do
-%  hasFlat <- s `hasAttribute` Flat
-%  return $ if hasFlat && all (== h) (map getHead es) then req else []
-%-- Matching with __
-%findMatches [] [BlankSequence] _ _                  = return []
-%findMatches _  [BlankSequence] _ req                = return req
-%findMatches [] [HeadedBlankSequence _] _ _          = return []
-%findMatches es [HeadedBlankSequence h] (Just s) req = do
-%  hasFlat <- s `hasAttribute` Flat
-%  return $ if hasFlat && all (== h) (map getHead es) then req else []
-%-- Matching with ___
-%findMatches _  [BlankNullSequence] _ req         = return req
-%findMatches es [HeadedBlankNullSequence h] _ req =
-%  return $ if all (== h) (map getHead es) then req else []
-%-- Matching with Pattern[s, p]
+\begin{code}
+match []  BlankSequence _ _ = return []
+match es BlankSequence _ req = return [(req, Sequence es)]
+\end{code}
+
+\begin{code}
+match [] (HeadedBlankSequence _) _ _ = return []
+match es (HeadedBlankSequence h) _ req
+  | all (== h) (map getHead es) = return [(req, Sequence es)]
+  | otherwise                   = return []
+\end{code}
+
+\begin{code}
+match es BlankNullSequence _ req = return [(req, Sequence es)]
+match es (HeadedBlankNullSequence h) _ req
+  | all (== h) (map getHead es) = return [(req, Sequence es)]
+  | otherwise                   = return []
+\end{code}
+
+\begin{code}
+match es (Pattern s p) lhs req = do
+  matches <- match es p lhs req
+  return [(b, e) | (bindings, e) <- matches,
+          let Just b = merge bindings [(s, e)]]
+  where merge :: Bindings -> Bindings -> Maybe Bindings
+        merge = undefined
+\end{code}
+
+\begin{code}
+match es (Alternative ps) lhs req = concatMapM (\p -> match es p lhs req) ps
+\end{code}
+\end{document}
+
 %findMatches es [Pattern s p] lhs req = do
 %  matches <- findMatches es [p] lhs req
 %  return undefined
 %\end{code}
-
-\end{document}
