@@ -25,7 +25,6 @@ executable kalkulu
     base >=4.8 && <4.9,
     containers,
     dynamic-mvector,
-    extra,
     free,
     haskeline,
     mtl,

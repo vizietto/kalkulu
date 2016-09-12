@@ -175,7 +175,9 @@ data LogExpression = LogItem     Expression
 pack :: [LogExpression] -> [LogExpression]
 pack s = [LogSequence s]
 
-type Kernel a = WriterT [LogExpression] (FreeT Action Identity) a
+type KernelT m a = WriterT [LogExpression] (FreeT Action m) a
+
+type Kernel a = KernelT Identity a 
 
 newtype RecursionLevel = RecursionLevel Int
 

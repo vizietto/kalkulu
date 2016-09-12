@@ -6,14 +6,14 @@
 This chapter describes the module \inline{Kalkulu.Pattern}, with the
 following header.
 \begin{code}
-{-# LANGUAGE OverloadedLists #-}
+-- {-# LANGUAGE OverloadedLists #-}
 module Kalkulu.Pattern where
 
 import Kalkulu.Expression
 import Kalkulu.Kernel
 import Kalkulu.Symbol
 import qualified Kalkulu.BuiltinSymbol as B
-import Control.Monad.Extra
+import Control.Monad.Trans
 import qualified Data.Vector as V
 \end{code}
 
@@ -76,14 +76,15 @@ is mapped to \verb?Verbatim[_]?, where the builtin symbol
 no subsitutions.
 \begin{code}
 instance ToExpression Pattern where
-  toExpression Blank                   = CmpB B.Blank []
-  toExpression BlankSequence           = CmpB B.BlankSequence []
-  toExpression BlankNullSequence       = CmpB B.BlankNullSequence []
-  toExpression (HeadedBlank h)         = CmpB B.Blank [h]
-  toExpression (HeadedBlankSequence h) = CmpB B.BlankSequence [h]
-  toExpression (HeadedBlankNullSequence h) = CmpB B.BlankNullSequence [h]
+  toExpression Blank                   = CmpB B.Blank V.empty
+  toExpression BlankSequence           = CmpB B.BlankSequence V.empty 
+  toExpression BlankNullSequence       = CmpB B.BlankNullSequence V.empty
+  toExpression (HeadedBlank h)         = CmpB B.Blank (V.singleton h)
+  toExpression (HeadedBlankSequence h) = CmpB B.BlankSequence (V.singleton h)
+  toExpression (HeadedBlankNullSequence h) =
+    CmpB B.BlankNullSequence (V.singleton h)
   toExpression (Pattern s p) =
-    CmpB B.Pattern [toExpression s, toExpression p]
+    CmpB B.Pattern (V.fromList [toExpression s, toExpression p])
   toExpression (Alternative es) =
     CmpB B.Alternative (V.fromList $ map toExpression es)
   toExpression (PatternCmp h as) =
@@ -171,7 +172,7 @@ The pattern matcher is based on two mutually recursive functions,
 pattern or a list of patterns against a list of expressions.
 \begin{spec}
 match ::  [Expression] -> Pattern -> Maybe Symbol
-                       -> Bindings -> Kernel [(Bindings, BoundExpression)]
+                       -> Bindings -> Kernel [] Bindings, BoundExpression)
 \end{spec}
 The third argument of type \inline{Maybe Symbol} is the preexisting
 head (if it exists). For example, matching \verb?f[x_]? against
@@ -188,8 +189,13 @@ and the second element is the expression bound to the pattern.
 The second function has the following signature.
 \begin{spec}
 matchMany :: [Expression] -> [Pattern] -> Maybe Symbol
-                                       -> Bindings -> Kernel [Bindings] 
+                                       -> Bindings -> Kernel [] Bindings
 \end{spec}
+
+\begin{code}
+liftK :: Monad m => m a -> KernelT m a
+liftK = lift . lift
+\end{code}
 
 \section{The pattern matcher}
 First, we match a list of expressions with the pattern \verb?_?.  A
@@ -197,76 +203,109 @@ First, we match a list of expressions with the pattern \verb?_?.  A
 we return an empty list.
 \begin{code}
 match :: [Expression] -> Pattern -> Maybe Symbol -> Bindings
-                                 -> Kernel [(Bindings, BoundExpression)]
-match [] Blank _ _ = return []
+                                 -> KernelT [] (Bindings, BoundExpression)
+match [] Blank _ _ = liftK []
 match [e] Blank (Just s) req = do
   hasFlat <- s `hasAttribute` Flat
   hasOneIdentity <- s `hasAttribute` OneIdentity
-  return $ if hasFlat && not hasOneIdentity
-    then [(req, Unique (Cmp (Symbol s) [e]))]
+  liftK $ if hasFlat && not hasOneIdentity
+    then [(req, Unique (Cmp (Symbol s) (V.singleton e)))]
     else [(req, Unique e)]
-match [e] Blank Nothing req = return [(req, Unique e)]
+match [e] Blank Nothing req = liftK [(req, Unique e)]
+match _ Blank Nothing _ = liftK []
 match es Blank (Just s) req = do
   hasFlat <- s `hasAttribute` Flat
-  return $ if hasFlat
+  liftK $ if hasFlat
     then [(req, Unique (Cmp (Symbol s) (V.fromList es)))]
     else []
 \end{code}
 
 \begin{code}
-match []  (HeadedBlank _) _ _ = return []
+match []  (HeadedBlank _) _ _ = liftK []
 match [e] (HeadedBlank h) (Just s) req = do
   hasFlat <- s `hasAttribute` Flat
   hasOneIdentity <- s `hasAttribute` OneIdentity
   let h' = Symbol s
-  return $ case hasFlat && not hasOneIdentity of
-    True  -> if getHead e == h' then [(req, Unique (Cmp h' [e]))] else []
+  liftK $ case hasFlat && not hasOneIdentity of
+    True  -> if getHead e == h' then [(req, Unique (Cmp h' $ V.singleton e))]
+                                else []
     False -> if getHead e == h then [(req, Unique e)] else []
 match [e] (HeadedBlank h) Nothing req
-  | getHead e == h = return [(req, Unique e)]
-  | otherwise      = return []
+  | getHead e == h = liftK [(req, Unique e)]
+  | otherwise      = liftK []
 match es (HeadedBlank h) (Just s) req = do
   hasFlat <- s `hasAttribute` Flat
   let h' = Symbol s
-  return $ if hasFlat && h == h'
+  liftK $ if hasFlat && h == h'
     then [(req, Unique (Cmp h' (V.fromList es)))]
     else []
-match _ (HeadedBlank _) Nothing _ = return []
+match _ (HeadedBlank _) Nothing _ = liftK []
 \end{code}
 
 \begin{code}
-match []  BlankSequence _ _ = return []
-match es BlankSequence _ req = return [(req, Sequence es)]
+match []  BlankSequence _ _ = liftK []
+match es BlankSequence _ req = liftK [(req, Sequence es)]
 \end{code}
 
 \begin{code}
-match [] (HeadedBlankSequence _) _ _ = return []
+match [] (HeadedBlankSequence _) _ _ = liftK []
 match es (HeadedBlankSequence h) _ req
-  | all (== h) (map getHead es) = return [(req, Sequence es)]
-  | otherwise                   = return []
+  | all (== h) (map getHead es) = liftK [(req, Sequence es)]
+  | otherwise                   = liftK []
 \end{code}
 
 \begin{code}
-match es BlankNullSequence _ req = return [(req, Sequence es)]
+match es BlankNullSequence _ req = liftK [(req, Sequence es)]
 match es (HeadedBlankNullSequence h) _ req
-  | all (== h) (map getHead es) = return [(req, Sequence es)]
-  | otherwise                   = return []
+  | all (== h) (map getHead es) = liftK [(req, Sequence es)]
+  | otherwise                   = liftK []
 \end{code}
 
 \begin{code}
-match es (Pattern s p) lhs req = do
-  matches <- match es p lhs req
-  return [(b, e) | (bindings, e) <- matches,
-          let Just b = merge bindings [(s, e)]]
-  where merge :: Bindings -> Bindings -> Maybe Bindings
-        merge = undefined
+match es (Pattern symb p) lhs req = do
+  (bindings, e) <- match es p lhs req
+  let Just b = insert bindings (symb, e)
+  return (b, e)
+  where insert :: Bindings -> (Symbol, BoundExpression) -> Maybe Bindings
+        insert [] x = Just [x]
+        insert req@(bind@(s, e) : bs) new@(s', e')
+          | s /= s'   = insert bs (s', e') >>= return . ((:) bind)
+          | otherwise = case (e, e') of
+              (Unique e1, Unique e2)      | e1 == e2 -> Just req
+              (Unique e1, Sequence[e2])   | e1 == e2 -> Just req
+              (Sequence[e1], Unique e2)   | e1 == e2 -> Just (new : bs)
+              (Sequence e1, Sequence e2)  | e1 == e2 -> Just req
+              _                                      -> Nothing
 \end{code}
 
 \begin{code}
-match es (Alternative ps) lhs req = concatMapM (\p -> match es p lhs req) ps
+match es (Alternative ps) lhs req = do
+  p <- liftK ps
+  match es p lhs req
 \end{code}
 \end{document}
+The only way for an expression to match with a pattern
+\inline{Expression e'} is to coincide with \verb?e'?.
+\begin{code}
+match [e] (Expression e') _ req
+  | e == e'   = liftK [(req, Unique e)]
+match _ (Expression _) _ _ = liftK []
+\end{code}
 
+\begin{code}
+match [e@(Cmp h as)] (PatternCmp h' ps) _ req = do
+   (req', _)  <- match [h] h' Nothing req
+   req'' <- matchMany (V.toList as) ps Nothing req'
+   return (req'', Unique e)
+match _ (PatternCmp _ _) _ _ = liftK []
+\end{code}
+
+
+\begin{code}
+matchMany :: [Expression] -> [Pattern] -> Maybe Symbol -> Bindings
+                          -> KernelT [] Bindings
+matchMany = undefined
+\end{code}
 %findMatches es [Pattern s p] lhs req = do
 %  matches <- findMatches es [p] lhs req
 %  return undefined
