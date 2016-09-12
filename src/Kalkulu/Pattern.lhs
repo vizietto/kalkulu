@@ -199,10 +199,6 @@ matchMany :: [Expression] -> [Pattern] -> Maybe Symbol
 \end{spec}
 
 \begin{code}
-liftK :: Monad m => m a -> KernelT m a
-liftK = lift . lift
-
-
 insert :: Bindings -> (Symbol, BoundExpression) -> Maybe Bindings
 insert [] x = Just [x]
 insert assoc@(bind@(s, e) : bs) new@(s', e')
@@ -222,61 +218,62 @@ we return an empty list.
 \begin{code}
 match :: [Expression] -> Pattern -> Maybe Symbol -> Bindings
                                  -> KernelT [] (Bindings, BoundExpression)
-match [] Blank _ _ = liftK []
+match [] Blank _ _ = mzero
 match [e] Blank (Just s) req = do
   hasFlat <- s `hasAttribute` Flat
   hasOneIdentity <- s `hasAttribute` OneIdentity
-  liftK $ if hasFlat && not hasOneIdentity
-    then [(req, Unique (Cmp (Symbol s) (V.singleton e)))]
-    else [(req, Unique e)]
-match [e] Blank Nothing req = liftK [(req, Unique e)]
-match _ Blank Nothing _ = liftK []
+  return $ if hasFlat && not hasOneIdentity
+    then (req, Unique (Cmp (Symbol s) (V.singleton e)))
+    else (req, Unique e)
+match [e] Blank Nothing req = return (req, Unique e)
+match _ Blank Nothing _ = mzero
 match es Blank (Just s) req = do
   hasFlat <- s `hasAttribute` Flat
-  liftK $ if hasFlat
-    then [(req, Unique (Cmp (Symbol s) (V.fromList es)))]
-    else []
+  if hasFlat
+    then return (req, Unique (Cmp (Symbol s) (V.fromList es)))
+    else mzero
 \end{code}
 
 \begin{code}
-match []  (HeadedBlank _) _ _ = liftK []
+match []  (HeadedBlank _) _ _ = mzero
 match [e] (HeadedBlank h) (Just s) req = do
   hasFlat <- s `hasAttribute` Flat
   hasOneIdentity <- s `hasAttribute` OneIdentity
   let h' = Symbol s
-  liftK $ case hasFlat && not hasOneIdentity of
-    True  -> if getHead e == h' then [(req, Unique (Cmp h' $ V.singleton e))]
-                                else []
-    False -> if getHead e == h then [(req, Unique e)] else []
+  case hasFlat && not hasOneIdentity of
+    True  -> if getHead e == h'
+      then return (req, Unique (Cmp h' $ V.singleton e))
+      else mzero
+    False -> if getHead e == h then return (req, Unique e) else mzero
 match [e] (HeadedBlank h) Nothing req
-  | getHead e == h = liftK [(req, Unique e)]
-  | otherwise      = liftK []
+  | getHead e == h = return (req, Unique e)
+  | otherwise      = mzero
 match es (HeadedBlank h) (Just s) req = do
   hasFlat <- s `hasAttribute` Flat
   let h' = Symbol s
-  liftK $ if hasFlat && h == h'
-    then [(req, Unique (Cmp h' (V.fromList es)))]
-    else []
-match _ (HeadedBlank _) Nothing _ = liftK []
+  if hasFlat && h == h'
+    then return (req, Unique (Cmp h' (V.fromList es)))
+    else mzero
+match _ (HeadedBlank _) Nothing _ = mzero
 \end{code}
 
 \begin{code}
-match []  BlankSequence _ _ = liftK []
-match es BlankSequence _ req = liftK [(req, Sequence es)]
+match []  BlankSequence _ _ = mzero
+match es BlankSequence _ req = return (req, Sequence es)
 \end{code}
 
 \begin{code}
-match [] (HeadedBlankSequence _) _ _ = liftK []
+match [] (HeadedBlankSequence _) _ _ = mzero
 match es (HeadedBlankSequence h) _ req
-  | all (== h) (map getHead es) = liftK [(req, Sequence es)]
-  | otherwise                   = liftK []
+  | all (== h) (map getHead es) = return (req, Sequence es)
+  | otherwise                   = mzero
 \end{code}
 
 \begin{code}
-match es BlankNullSequence _ req = liftK [(req, Sequence es)]
+match es BlankNullSequence _ req = return (req, Sequence es)
 match es (HeadedBlankNullSequence h) _ req
-  | all (== h) (map getHead es) = liftK [(req, Sequence es)]
-  | otherwise                   = liftK []
+  | all (== h) (map getHead es) = return (req, Sequence es)
+  | otherwise                   = mzero
 \end{code}
 
 \begin{code}
@@ -287,16 +284,18 @@ match es (Pattern symb p) lhs req = do
 \end{code}
 
 \begin{code}
-match es (Alternative ps) lhs req = do
-  p <- liftK ps
-  match es p lhs req
+match es (Alternative ps) lhs req =
+  -- msum [match es p lhs req | p <- ps]
+  do p <- liftK ps
+     match es p lhs req
+  where liftK = undefined
 \end{code}
 \end{document}
 The only way for an expression to match with a pattern
 \inline{Expression e'} is to coincide with \verb?e'?.
 \begin{code}
 match [e] (Expression e') _ req
-  | e == e'   = liftK [(req, Unique e)]
+  | e == e'   = return (req, Unique e)
 match _ (Expression _) _ _ = mzero
 \end{code}
 
