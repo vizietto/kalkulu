@@ -13,6 +13,7 @@ import Kalkulu.Expression
 import Kalkulu.Kernel
 import Kalkulu.Symbol
 import qualified Kalkulu.BuiltinSymbol as B
+import Control.Monad
 import Control.Monad.Trans
 import qualified Data.Vector as V
 \end{code}
@@ -31,16 +32,19 @@ pattern \verb?_? represents any expression, whereas the pattern
 type \inline{Pattern}, with the possibility to convert a
 \inline{Pattern} to an \inline{Expression}.
 \begin{code}
-data Pattern = Blank                                     -- _
-             | BlankSequence                             -- __
-             | BlankNullSequence                         -- ___
-             | HeadedBlank             Expression        -- e_
-             | HeadedBlankSequence     Expression        -- e__
-             | HeadedBlankNullSequence Expression        -- e___
-             | Pattern                 Symbol Pattern    -- s:p
-             | Alternative             [Pattern]         -- a|b|c|..
-             | Expression              Expression        -- e
-             | PatternCmp              Pattern [Pattern] -- p[p1, ..]
+data Pattern =
+    Blank                                       -- _
+  | BlankSequence                               -- __
+  | BlankNullSequence                           -- ___
+  | HeadedBlank             Expression          -- e_
+  | HeadedBlankSequence     Expression          -- e__
+  | HeadedBlankNullSequence Expression          -- e___
+  | Pattern                 Symbol Pattern      -- s:p
+  | Alternative             [Pattern]           -- a|b|c|..
+  | Optional1               Pattern             -- Optional[p]
+  | Optional2               Pattern Expression  -- Optional[p, e]
+  | Expression              Expression          -- e
+  | PatternCmp              Pattern [Pattern]   -- p[p1, ..]
 \end{code}
 Most of the above constructors should be familiar to the
 \emph{Kalkulu} user: the corresponding \emph{Kalkulu} expression is
@@ -87,6 +91,8 @@ instance ToExpression Pattern where
     CmpB B.Pattern (V.fromList [toExpression s, toExpression p])
   toExpression (Alternative es) =
     CmpB B.Alternative (V.fromList $ map toExpression es)
+  toExpression (Optional1 p) = CmpB B.Optional (V.singleton $ toExpression p)
+  toExpression (Optional2 p e) = CmpB B.Optional (V.fromList [toExpression p, e])
   toExpression (PatternCmp h as) =
     Cmp (toExpression h) (V.fromList $ map toExpression as)
   toExpression (Expression e) = e -- TODO: add Verbatim
@@ -195,6 +201,18 @@ matchMany :: [Expression] -> [Pattern] -> Maybe Symbol
 \begin{code}
 liftK :: Monad m => m a -> KernelT m a
 liftK = lift . lift
+
+
+insert :: Bindings -> (Symbol, BoundExpression) -> Maybe Bindings
+insert [] x = Just [x]
+insert assoc@(bind@(s, e) : bs) new@(s', e')
+  | s /= s'   = insert bs (s', e') >>= return . ((:) bind)
+  | otherwise = case (e, e') of
+      (Unique e1, Unique e2)      | e1 == e2 -> Just assoc
+      (Unique e1, Sequence[e2])   | e1 == e2 -> Just assoc
+      (Sequence[e1], Unique e2)   | e1 == e2 -> Just (new : bs)
+      (Sequence e1, Sequence e2)  | e1 == e2 -> Just assoc
+      _                                      -> Nothing
 \end{code}
 
 \section{The pattern matcher}
@@ -266,16 +284,6 @@ match es (Pattern symb p) lhs req = do
   (bindings, e) <- match es p lhs req
   let Just b = insert bindings (symb, e)
   return (b, e)
-  where insert :: Bindings -> (Symbol, BoundExpression) -> Maybe Bindings
-        insert [] x = Just [x]
-        insert req@(bind@(s, e) : bs) new@(s', e')
-          | s /= s'   = insert bs (s', e') >>= return . ((:) bind)
-          | otherwise = case (e, e') of
-              (Unique e1, Unique e2)      | e1 == e2 -> Just req
-              (Unique e1, Sequence[e2])   | e1 == e2 -> Just req
-              (Sequence[e1], Unique e2)   | e1 == e2 -> Just (new : bs)
-              (Sequence e1, Sequence e2)  | e1 == e2 -> Just req
-              _                                      -> Nothing
 \end{code}
 
 \begin{code}
@@ -289,15 +297,36 @@ The only way for an expression to match with a pattern
 \begin{code}
 match [e] (Expression e') _ req
   | e == e'   = liftK [(req, Unique e)]
-match _ (Expression _) _ _ = liftK []
+match _ (Expression _) _ _ = mzero
 \end{code}
 
+\begin{code}
+match es (Optional1 p) Nothing req = match es p Nothing req
+match es (Optional1 pat@(Pattern s _)) (Just s') req =
+  bindings `mplus` optionalBindings
+  where bindings = match es pat (Just s') req
+        optionalBindings = do Just def <- getDefault s'
+                              let Just req' = insert req (s, Unique def)
+                              return (req', Unique def)
+match es (Optional1 p) (Just s) req =
+  bindings `mplus` optionalBindings
+  where bindings = match es p (Just s) req
+        optionalBindings = do Just def <- getDefault s
+                              return (req, Unique def)
+\end{code}
+
+\begin{code}
+match es (Optional2 p def) lhs req =
+  match es p lhs req `mplus` return (req, Unique def)
+\end{code}
+
+To change (\verb?MatchQ[b, a_. + b] == True?).
 \begin{code}
 match [e@(Cmp h as)] (PatternCmp h' ps) _ req = do
    (req', _)  <- match [h] h' Nothing req
    req'' <- matchMany (V.toList as) ps Nothing req'
    return (req'', Unique e)
-match _ (PatternCmp _ _) _ _ = liftK []
+match _ (PatternCmp _ _) _ _ = mzero
 \end{code}
 
 

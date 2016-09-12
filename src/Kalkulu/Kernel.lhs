@@ -84,6 +84,7 @@ data Action a =
     GetSymbolMaybe    ContextName SymbolName (Maybe Symbol -> a)
   | CreateSymbol      ContextName SymbolName (Symbol -> a)
   | GetBuiltinCode    Symbol (BuiltinCode -> a)
+  | GetDefault        Symbol (Maybe Expression -> a)
   | HasAttribute      Symbol Attribute          (Bool -> a)
   | GetIterationLimit (Maybe Int -> a)
   | SetIterationLimit (Maybe Int) a
@@ -97,6 +98,7 @@ class Monad m => MonadEnv m where
   getSymbolMaybe    :: ContextName -> SymbolName -> m (Maybe Symbol)
   createSymbol      :: ContextName -> SymbolName -> m Symbol
   getBuiltinCode    :: Symbol -> m BuiltinCode
+  getDefault        :: Symbol -> m (Maybe Expression)
   hasAttribute      :: Symbol -> Attribute -> m Bool
   getIterationLimit :: m (Maybe Int)
   setIterationLimit :: Maybe Int -> m ()
@@ -105,10 +107,11 @@ class Monad m => MonadEnv m where
   getCurrentContext :: m String
   getContextPath    :: m [String]
 
-instance (MonadEnv m, Monoid w) => MonadEnv (WriterT w m) where
+instance (Monoid w, MonadEnv m) => MonadEnv (WriterT w m) where
   getSymbolMaybe c s = lift $ getSymbolMaybe c s
   createSymbol   c s = lift $ createSymbol c s
   getBuiltinCode     = lift . getBuiltinCode
+  getDefault s       = lift $ getDefault s
   hasAttribute s a   = lift $ hasAttribute s a
   getIterationLimit  = lift getIterationLimit
   setIterationLimit  = lift . setIterationLimit
@@ -121,6 +124,7 @@ instance Monad m => MonadEnv (FreeT Action m) where
   getSymbolMaybe c s  = liftF $ GetSymbolMaybe c s id
   createSymbol c s    = liftF $ CreateSymbol c s id
   getBuiltinCode s    = liftF $ GetBuiltinCode s id
+  getDefault s        = liftF $ GetDefault s id
   hasAttribute s at   = liftF $ HasAttribute s at id
   getIterationLimit   = liftF $ GetIterationLimit id
   setIterationLimit l = liftF $ SetIterationLimit l ()
