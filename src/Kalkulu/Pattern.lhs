@@ -10,11 +10,12 @@ following header.
 module Kalkulu.Pattern where
 
 import Kalkulu.Expression
+import Kalkulu.Evaluation
 import Kalkulu.Kernel
 import Kalkulu.Symbol
 import qualified Kalkulu.BuiltinSymbol as B
 import Control.Monad
-import Control.Monad.Trans
+import Control.Monad.Identity
 import qualified Data.Vector as V
 \end{code}
 
@@ -40,6 +41,8 @@ data Pattern =
   | HeadedBlankSequence     Expression          -- e__
   | HeadedBlankNullSequence Expression          -- e___
   | Pattern                 Symbol Pattern      -- s:p
+  | Condition               Pattern Expression  -- p /; cond
+  | PatternTest             Pattern Expression  -- p?expr
   | Alternative             [Pattern]           -- a|b|c|..
   | Optional1               Pattern             -- Optional[p]
   | Optional2               Pattern Expression  -- Optional[p, e]
@@ -89,6 +92,8 @@ instance ToExpression Pattern where
     CmpB B.BlankNullSequence (V.singleton h)
   toExpression (Pattern s p) =
     CmpB B.Pattern (V.fromList [toExpression s, toExpression p])
+  toExpression (PatternTest p cond) =
+    CmpB B.PatternTest (V.fromList [toExpression p, cond])
   toExpression (Alternative es) =
     CmpB B.Alternative (V.fromList $ map toExpression es)
   toExpression (Optional1 p) = CmpB B.Optional (V.singleton $ toExpression p)
@@ -167,6 +172,10 @@ expressions. For that, we introduce the type
 \begin{code}
 data BoundExpression = Unique Expression
                      | Sequence [Expression]
+
+instance ToExpression BoundExpression where
+  toExpression (Unique e) = e
+  toExpression (Sequence es) = CmpB B.Sequence (V.fromList es)
 \end{code}
 Several symbols can be bound to \inline{BoundExpression}s. The result
 of pattern matching is an association list.
@@ -209,6 +218,19 @@ insert assoc@(bind@(s, e) : bs) new@(s', e')
       (Sequence[e1], Unique e2)   | e1 == e2 -> Just (new : bs)
       (Sequence e1, Sequence e2)  | e1 == e2 -> Just assoc
       _                                      -> Nothing
+
+hoist :: Kernel a -> KernelT [] a
+hoist = mapKernelT identityToList
+  where identityToList :: Identity a -> [a]
+        identityToList x = [runIdentity x]
+
+replace :: Bindings -> Expression -> Expression
+replace [] e = e
+replace bs (Cmp h args) = Cmp (replace bs h) (V.map (replace bs) args)
+replace ((s, b):bs) e@(Symbol s')
+  | s == s'   = toExpression b
+  | otherwise = replace bs e
+replace _ e = e
 \end{code}
 
 \section{The pattern matcher}
@@ -281,6 +303,26 @@ match es (Pattern symb p) lhs req = do
   (bindings, e) <- match es p lhs req
   let Just b = insert bindings (symb, e)
   return (b, e)
+\end{code}
+
+\begin{code}
+match es (PatternTest p cond) lhs req = do
+  (req', bound) <- match es p lhs req
+  checkCond <- case bound of
+        Unique x    -> do
+          x' <- hoist $ evaluate (Cmp cond (V.singleton x))
+          return $ x' == toExpression True
+        Sequence xs -> do
+          xs' <- hoist $ mapM (\e -> evaluate $ Cmp cond (V.singleton e)) xs
+          return $ all (== toExpression True) xs'
+  if checkCond then return (req', bound) else mzero
+\end{code}
+
+\begin{code}
+match es (Condition p cond) lhs req = do
+  (req', bound) <- match es p lhs req
+  cond_ev <- hoist $ evaluate $ replace req' cond
+  if cond_ev == toExpression True then return (req', bound) else mzero
 \end{code}
 
 \begin{code}

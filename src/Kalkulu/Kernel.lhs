@@ -7,7 +7,7 @@
 This chapter describes the module \inline{Kalkulu.Kernel}, whose
 header is
 \begin{code}
-{-# LANGUAGE DeriveFunctor, FlexibleInstances #-}
+{-# LANGUAGE DeriveFunctor, FlexibleInstances, Rank2Types #-}
 
 module Kalkulu.Kernel where
 
@@ -181,14 +181,11 @@ pack s = [LogSequence s]
 
 type KernelT m a = WriterT [LogExpression] (FreeT Action m) a
 
+mapKernelT :: (Monad m, Monad n, Functor n) => (forall a. m a -> n a) -> KernelT m b -> KernelT n b
+mapKernelT = undefined
+
+        
 type Kernel a = KernelT Identity a 
-
-newtype RecursionLevel = RecursionLevel Int
-
-instance Monoid RecursionLevel where
-  mempty = RecursionLevel 0
-  (RecursionLevel n) `mappend` (RecursionLevel m) = RecursionLevel (n+m)
-
 \end{code}
 
 \end{document}
