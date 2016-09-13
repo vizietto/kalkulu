@@ -15,7 +15,6 @@ import Data.List (intercalate)
 import Data.List.Split (splitWhen)
 import Control.Monad.Identity
 import Control.Monad.Morph
-import Control.Monad.Trans
 import Control.Monad.Trans.Free
 import Control.Monad.Trans.Writer
 import ListT (ListT)

@@ -52,6 +52,7 @@ data Pattern =
   | Optional2               Pattern Expression  -- Optional[p, e]
   | Expression              Expression          -- e
   | PatternCmp              Pattern [Pattern]   -- p[p1, ..]
+  deriving Show -- for debbuging
 \end{code}
 Most of the above constructors should be familiar to the
 \emph{Kalkulu} user: the corresponding \emph{Kalkulu} expression is
@@ -190,6 +191,7 @@ expressions. For that, we introduce the type
 \begin{code}
 data BoundExpression = Unique Expression
                      | Sequence [Expression]
+                     deriving Show -- for debugging
 
 instance ToExpression BoundExpression where
   toExpression (Unique e) = e
@@ -229,7 +231,9 @@ matchMany :: [Expression] -> [Pattern] -> Maybe Symbol
 insert :: Bindings -> (Symbol, BoundExpression) -> Maybe Bindings
 insert [] x = Just [x]
 insert assoc@(bind@(s, e) : bs) new@(s', e')
-  | s /= s'   = insert bs (s', e') >>= return . ((:) bind)
+  | s /= s'   = do
+      bindings <- insert bs new
+      return (bind : bindings)
   | otherwise = case (e, e') of
       (Unique e1, Unique e2)      | e1 == e2 -> Just assoc
       (Unique e1, Sequence[e2])   | e1 == e2 -> Just assoc
@@ -318,8 +322,9 @@ match es (HeadedBlankNullSequence h) _ req
 \begin{code}
 match es (Pattern symb p) lhs req = do
   (bindings, e) <- match es p lhs req
-  let Just b = insert bindings (symb, e)
-  return (b, e)
+  case insert bindings (symb, e) of
+    Just b  -> return (b, e)
+    Nothing -> mzero
 \end{code}
 
 \begin{code}
@@ -380,18 +385,22 @@ match es (Optional2 p def) lhs req =
 
 To change (\verb?MatchQ[b, a_. + b] == True?).
 \begin{code}
-match [e@(Cmp h as)] (PatternCmp h' ps) (Just s) req = do
-  hasOrderless <- s `hasAttribute` Orderless
-  (req', _)  <- match [h] h' Nothing req
-  let args = V.toList as
-  if hasOrderless then do
-    es <- returnListT $ permutations args
-    req'' <- matchMany es ps Nothing req' -- TODO
-    return (req'', Unique e)
-  else do
-    req'' <- matchMany args ps Nothing req' -- TODO: change Nothing
-    return (req'', Unique e)
+match [e@(Cmp h as)] (PatternCmp h' ps) _ req = do
+  (req', _) <- match [h] h' Nothing req -- TODO: Nothing?
+  req'' <- matchMany (V.toList as) ps Nothing req'
+  return (req'', Unique e)
 match _ (PatternCmp _ _) _ _ = mzero
+-- match [e@(Cmp h as)] (PatternCmp h' ps) _ req = do
+--   hasOrderless <- h `hasAttribute` Orderless
+--   (req', _)  <- match [h] h' Nothing req
+--   let args = V.toList as
+--   if hasOrderless then do
+--     es <- returnListT $ permutations args
+--     req'' <- matchMany es ps Nothing req' -- TODO
+--     return (req'', Unique e)
+--   else do
+--     req'' <- matchMany args ps Nothing req' -- TODO: change Nothing
+--     return (req'', Unique e)
 \end{code}
 
 

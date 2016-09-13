@@ -18,6 +18,7 @@ the kernel.
 data Symbol =
     Builtin    B.BuiltinSymbol
   | UserSymbol SymbolId SymbolName ContextName
+  deriving Show -- for debbuging
 
 type SymbolId    = Int
 type SymbolName  = String
