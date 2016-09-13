@@ -25,6 +25,7 @@ import qualified Kalkulu.Builtin.Plus
 import qualified Kalkulu.Builtin.Times
 import qualified Kalkulu.Builtin.SameQ
 import qualified Kalkulu.Builtin.Length
+import qualified Kalkulu.Builtin.MatchQ
 import Kalkulu.Kernel
 
 data Environment = Environment {
@@ -75,6 +76,7 @@ defaultEnvironment = Environment
         def B.Indeterminate = toDefinition Kalkulu.Builtin.Indeterminate.indeterminate
         def B.If = toDefinition Kalkulu.Builtin.If.if_
         def B.Length = toDefinition Kalkulu.Builtin.Length.length_
+        def B.MatchQ = toDefinition Kalkulu.Builtin.MatchQ.matchQ
         def B.Plus = toDefinition Kalkulu.Builtin.Plus.plus
         def B.Times = toDefinition Kalkulu.Builtin.Times.times
         def B.True = toDefinition Kalkulu.Builtin.Logic.true

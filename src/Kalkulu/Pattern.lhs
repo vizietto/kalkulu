@@ -6,7 +6,7 @@
 This chapter describes the module \inline{Kalkulu.Pattern}, with the
 following header.
 \begin{code}
--- {-# LANGUAGE OverloadedLists #-}
+{-# LANGUAGE OverloadedLists #-}
 module Kalkulu.Pattern where
 
 import Kalkulu.Expression
@@ -16,7 +16,11 @@ import Kalkulu.Symbol
 import qualified Kalkulu.BuiltinSymbol as B
 import Control.Monad
 import Control.Monad.Identity
+import Control.Monad.Trans
+import qualified ListT
+import ListT (ListT(..))
 import qualified Data.Vector as V
+import Data.List (inits, tails, permutations)
 \end{code}
 
 \section{Patterns}
@@ -83,26 +87,40 @@ is mapped to \verb?Verbatim[_]?, where the builtin symbol
 no subsitutions.
 \begin{code}
 instance ToExpression Pattern where
-  toExpression Blank                   = CmpB B.Blank V.empty
-  toExpression BlankSequence           = CmpB B.BlankSequence V.empty 
-  toExpression BlankNullSequence       = CmpB B.BlankNullSequence V.empty
-  toExpression (HeadedBlank h)         = CmpB B.Blank (V.singleton h)
-  toExpression (HeadedBlankSequence h) = CmpB B.BlankSequence (V.singleton h)
-  toExpression (HeadedBlankNullSequence h) =
-    CmpB B.BlankNullSequence (V.singleton h)
-  toExpression (Pattern s p) =
-    CmpB B.Pattern (V.fromList [toExpression s, toExpression p])
-  toExpression (PatternTest p cond) =
-    CmpB B.PatternTest (V.fromList [toExpression p, cond])
-  toExpression (Alternative es) =
-    CmpB B.Alternative (V.fromList $ map toExpression es)
-  toExpression (Optional1 p) = CmpB B.Optional (V.singleton $ toExpression p)
-  toExpression (Optional2 p e) = CmpB B.Optional (V.fromList [toExpression p, e])
+  toExpression Blank                   = CmpB B.Blank []
+  toExpression BlankSequence           = CmpB B.BlankSequence []
+  toExpression BlankNullSequence       = CmpB B.BlankNullSequence []
+  toExpression (HeadedBlank h)         = CmpB B.Blank [h]
+  toExpression (HeadedBlankSequence h) = CmpB B.BlankSequence [h]
+  toExpression (HeadedBlankNullSequence h) = CmpB B.BlankNullSequence [h]
+  toExpression (Pattern s p) = CmpB B.Pattern [toExpression s, toExpression p]
+  toExpression (PatternTest p cond) = CmpB B.PatternTest [toExpression p, cond]
+  toExpression (Alternative es) = CmpB B.Alternative (V.fromList $ map toExpression es)
+  toExpression (Optional1 p) = CmpB B.Optional [toExpression p]
+  toExpression (Optional2 p e) = CmpB B.Optional [toExpression p, e]
   toExpression (PatternCmp h as) =
     Cmp (toExpression h) (V.fromList $ map toExpression as)
   toExpression (Expression e) = e -- TODO: add Verbatim
 \end{code}
-
+\begin{code}
+toPattern :: Expression -> Pattern
+toPattern (CmpB B.Blank []) = Blank
+toPattern (CmpB B.Blank [h]) = HeadedBlank h
+toPattern (CmpB B.BlankSequence []) = BlankSequence
+toPattern (CmpB B.BlankSequence [h]) = HeadedBlankSequence h
+toPattern (CmpB B.BlankNullSequence []) = BlankNullSequence
+toPattern (CmpB B.BlankNullSequence [h]) = HeadedBlankNullSequence h
+toPattern (CmpB B.Pattern [Symbol s, p]) = Pattern s (toPattern p)
+toPattern (CmpB B.PatternTest [p, cond]) = PatternTest (toPattern p) cond
+toPattern (CmpB B.Alternative args) =
+  Alternative (map toPattern $ V.toList args)
+toPattern (CmpB B.Optional [p]) = Optional1 (toPattern p)
+toPattern (CmpB B.Optional [p, opt]) = Optional2 (toPattern p) opt
+toPattern (Cmp h args) =
+  PatternCmp (toPattern h) (map toPattern $ V.toList args)
+toPattern e = Expression e
+{-# LANGUAGE NoOverloadedLists #-}
+\end{code}
 \section{What is pattern matching?}
 Pattern matching involves an expression and a pattern.
 Basically, the purpose of pattern matching is to decide whether the
@@ -219,10 +237,9 @@ insert assoc@(bind@(s, e) : bs) new@(s', e')
       (Sequence e1, Sequence e2)  | e1 == e2 -> Just assoc
       _                                      -> Nothing
 
-hoist :: Kernel a -> KernelT [] a
-hoist = mapKernelT identityToList
-  where identityToList :: Identity a -> [a]
-        identityToList x = [runIdentity x]
+returnListT :: Monad m => [a] -> ListT m a
+returnListT []     = ListT (return Nothing)
+returnListT (a:as) = ListT (return $ Just (a, returnListT as))
 
 replace :: Bindings -> Expression -> Expression
 replace [] e = e
@@ -239,7 +256,7 @@ First, we match a list of expressions with the pattern \verb?_?.  A
 we return an empty list.
 \begin{code}
 match :: [Expression] -> Pattern -> Maybe Symbol -> Bindings
-                                 -> KernelT [] (Bindings, BoundExpression)
+                      -> ListT.ListT (KernelT Identity) (Bindings, BoundExpression)
 match [] Blank _ _ = mzero
 match [e] Blank (Just s) req = do
   hasFlat <- s `hasAttribute` Flat
@@ -310,10 +327,10 @@ match es (PatternTest p cond) lhs req = do
   (req', bound) <- match es p lhs req
   checkCond <- case bound of
         Unique x    -> do
-          x' <- hoist $ evaluate (Cmp cond (V.singleton x))
+          x' <- lift $ evaluate (Cmp cond (V.singleton x))
           return $ x' == toExpression True
         Sequence xs -> do
-          xs' <- hoist $ mapM (\e -> evaluate $ Cmp cond (V.singleton e)) xs
+          xs' <- lift $ mapM (\e -> evaluate $ Cmp cond (V.singleton e)) xs
           return $ all (== toExpression True) xs'
   if checkCond then return (req', bound) else mzero
 \end{code}
@@ -321,7 +338,7 @@ match es (PatternTest p cond) lhs req = do
 \begin{code}
 match es (Condition p cond) lhs req = do
   (req', bound) <- match es p lhs req
-  cond_ev <- hoist $ evaluate $ replace req' cond
+  cond_ev <- lift $ evaluate $ replace req' cond
   if cond_ev == toExpression True then return (req', bound) else mzero
 \end{code}
 
@@ -363,20 +380,36 @@ match es (Optional2 p def) lhs req =
 
 To change (\verb?MatchQ[b, a_. + b] == True?).
 \begin{code}
-match [e@(Cmp h as)] (PatternCmp h' ps) _ req = do
-   (req', _)  <- match [h] h' Nothing req
-   req'' <- matchMany (V.toList as) ps Nothing req'
-   return (req'', Unique e)
+match [e@(Cmp h as)] (PatternCmp h' ps) (Just s) req = do
+  hasOrderless <- s `hasAttribute` Orderless
+  (req', _)  <- match [h] h' Nothing req
+  let args = V.toList as
+  if hasOrderless then do
+    es <- returnListT $ permutations args
+    req'' <- matchMany es ps Nothing req' -- TODO
+    return (req'', Unique e)
+  else do
+    req'' <- matchMany args ps Nothing req' -- TODO: change Nothing
+    return (req'', Unique e)
 match _ (PatternCmp _ _) _ _ = mzero
 \end{code}
 
 
 \begin{code}
 matchMany :: [Expression] -> [Pattern] -> Maybe Symbol -> Bindings
-                          -> KernelT [] Bindings
-matchMany = undefined
+                          -> ListT (KernelT Identity) Bindings
+matchMany [] [] _ req = return req
+matchMany _ [] _ _ = mzero
+matchMany es (p:ps) lhs req = do
+  (es_left, es_right) <- returnListT $ zip (inits es) (tails es)
+  (req', _) <- match es_left p lhs req
+  matchMany es_right ps lhs req'
 \end{code}
-%findMatches es [Pattern s p] lhs req = do
-%  matches <- findMatches es [p] lhs req
-%  return undefined
-%\end{code}
+
+
+\begin{code}
+matchPattern :: Expression -> Pattern -> Kernel [Bindings]
+matchPattern e p = ListT.toList $ fmap fst $ match [e] p Nothing []
+\end{code}
+
+\end{document}

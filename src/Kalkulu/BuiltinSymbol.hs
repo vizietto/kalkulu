@@ -51,6 +51,7 @@ data BuiltinSymbol =
   | Locked
   | Map
   | MapAll
+  | MatchQ
   | MessageName
   | NHoldAll
   | NHoldRest

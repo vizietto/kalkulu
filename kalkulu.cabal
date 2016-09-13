@@ -27,6 +27,8 @@ executable kalkulu
     dynamic-mvector,
     free,
     haskeline,
+    list-t,
+    mmorph,
     mtl,
     parsec,
     split,

@@ -14,9 +14,11 @@ module Kalkulu.Kernel where
 import Data.List (intercalate)
 import Data.List.Split (splitWhen)
 import Control.Monad.Identity
+import Control.Monad.Morph
 import Control.Monad.Trans
 import Control.Monad.Trans.Free
 import Control.Monad.Trans.Writer
+import ListT (ListT)
 
 import qualified Kalkulu.BuiltinSymbol as B
 import Kalkulu.Expression
@@ -120,6 +122,19 @@ instance (Monoid w, MonadEnv m) => MonadEnv (WriterT w m) where
   getCurrentContext  = lift getCurrentContext
   getContextPath     = lift getContextPath
 
+instance MonadEnv m => MonadEnv (ListT m) where
+  getSymbolMaybe c s = lift $ getSymbolMaybe c s
+  createSymbol   c s = lift $ createSymbol c s
+  getBuiltinCode     = lift . getBuiltinCode
+  getDefault s       = lift $ getDefault s
+  hasAttribute s a   = lift $ hasAttribute s a
+  getIterationLimit  = lift getIterationLimit
+  setIterationLimit  = lift . setIterationLimit
+  getRecursionLimit  = lift getRecursionLimit
+  setRecursionLimit  = lift . setRecursionLimit
+  getCurrentContext  = lift getCurrentContext
+  getContextPath     = lift getContextPath
+
 instance Monad m => MonadEnv (FreeT Action m) where
   getSymbolMaybe c s  = liftF $ GetSymbolMaybe c s id
   createSymbol c s    = liftF $ CreateSymbol c s id
@@ -179,11 +194,7 @@ data LogExpression = LogItem     Expression
 pack :: [LogExpression] -> [LogExpression]
 pack s = [LogSequence s]
 
-type KernelT m a = WriterT [LogExpression] (FreeT Action m) a
-
-mapKernelT :: (Monad m, Monad n, Functor n) => (forall a. m a -> n a) -> KernelT m b -> KernelT n b
-mapKernelT = undefined
-
+type KernelT m = WriterT [LogExpression] (FreeT Action m)
         
 type Kernel a = KernelT Identity a 
 \end{code}

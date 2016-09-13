@@ -1,7 +1,6 @@
 module Main where
 
 import Kalkulu.Parser
-import Kalkulu.Pattern
 import Kalkulu.Evaluation (evaluate)
 import Kalkulu.Environment
 import Text.ParserCombinators.Parsec
