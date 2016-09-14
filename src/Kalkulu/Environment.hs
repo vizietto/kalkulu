@@ -17,6 +17,7 @@ import qualified Kalkulu.Builtin as BD
 
 import qualified Kalkulu.Builtin.AtomQ
 import qualified Kalkulu.Builtin.Attributes
+import qualified Kalkulu.Builtin.Flatten
 import qualified Kalkulu.Builtin.Head
 import qualified Kalkulu.Builtin.Indeterminate
 import qualified Kalkulu.Builtin.If
@@ -25,7 +26,7 @@ import qualified Kalkulu.Builtin.Plus
 import qualified Kalkulu.Builtin.Times
 import qualified Kalkulu.Builtin.SameQ
 import qualified Kalkulu.Builtin.Length
-import qualified Kalkulu.Builtin.MatchQ
+import qualified Kalkulu.Builtin.Pattern
 import Kalkulu.Kernel
 
 data Environment = Environment {
@@ -72,12 +73,16 @@ defaultEnvironment = Environment
         def B.AtomQ = toDefinition Kalkulu.Builtin.AtomQ.atomQ
         def B.Attributes = toDefinition Kalkulu.Builtin.Attributes.attributes_
         def B.False = toDefinition Kalkulu.Builtin.Logic.false
+        def B.Flatten = toDefinition Kalkulu.Builtin.Flatten.flatten
         def B.Head = toDefinition Kalkulu.Builtin.Head.head_
         def B.Indeterminate = toDefinition Kalkulu.Builtin.Indeterminate.indeterminate
         def B.If = toDefinition Kalkulu.Builtin.If.if_
         def B.Length = toDefinition Kalkulu.Builtin.Length.length_
-        def B.MatchQ = toDefinition Kalkulu.Builtin.MatchQ.matchQ
+        def B.MatchQ = toDefinition Kalkulu.Builtin.Pattern.matchQ
         def B.Plus = toDefinition Kalkulu.Builtin.Plus.plus
+        def B.Replace = toDefinition Kalkulu.Builtin.Pattern.replace
+        def B.Rule = toDefinition Kalkulu.Builtin.Pattern.rule
+        def B.RuleDelayed = toDefinition Kalkulu.Builtin.Pattern.ruleDelayed
         def B.Times = toDefinition Kalkulu.Builtin.Times.times
         def B.True = toDefinition Kalkulu.Builtin.Logic.true
         def B.SameQ = toDefinition Kalkulu.Builtin.SameQ.sameQ

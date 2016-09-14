@@ -245,13 +245,14 @@ returnListT :: Monad m => [a] -> ListT m a
 returnListT []     = ListT (return Nothing)
 returnListT (a:as) = ListT (return $ Just (a, returnListT as))
 
-replace :: Bindings -> Expression -> Expression
-replace [] e = e
-replace bs (Cmp h args) = Cmp (replace bs h) (V.map (replace bs) args)
-replace ((s, b):bs) e@(Symbol s')
+applyBindings :: Bindings -> Expression -> Expression
+applyBindings [] e = e
+applyBindings bs (Cmp h args) =
+  Cmp (applyBindings bs h) (V.map (applyBindings bs) args)
+applyBindings ((s, b):bs) e@(Symbol s')
   | s == s'   = toExpression b
-  | otherwise = replace bs e
-replace _ e = e
+  | otherwise = applyBindings bs e
+applyBindings _ e = e
 \end{code}
 
 \section{The pattern matcher}
@@ -343,16 +344,12 @@ match es (PatternTest p cond) lhs req = do
 \begin{code}
 match es (Condition p cond) lhs req = do
   (req', bound) <- match es p lhs req
-  cond_ev <- lift $ evaluate $ replace req' cond
+  cond_ev <- lift $ evaluate $ applyBindings req' cond
   if cond_ev == toExpression True then return (req', bound) else mzero
 \end{code}
 
 \begin{code}
-match es (Alternative ps) lhs req =
-  -- msum [match es p lhs req | p <- ps]
-  do p <- liftK ps
-     match es p lhs req
-  where liftK = undefined
+match es (Alternative ps) lhs req = msum [match es p lhs req | p <- ps]
 \end{code}
 \end{document}
 The only way for an expression to match with a pattern
@@ -419,6 +416,29 @@ matchMany es (p:ps) lhs req = do
 \begin{code}
 matchPattern :: Expression -> Pattern -> Kernel [Bindings]
 matchPattern e p = ListT.toList $ fmap fst $ match [e] p Nothing []
+\end{code}
+
+\section{Rules}
+
+\begin{code}
+{-# LANGUAGE OverloadedLists #-}
+data Rule = Rule Pattern Expression
+
+instance ToExpression Rule where
+  toExpression (Rule p e) =
+    CmpB B.RuleDelayed [CmpB B.HoldPattern [toExpression p], e]
+
+toRule :: Expression -> Maybe Rule
+toRule (CmpB rule [p, e]) | rule == B.Rule || rule == B.RuleDelayed
+  = Just $ Rule (toPattern p) e
+toRule _ = Nothing
+
+replace :: Expression -> Rule -> Kernel Expression
+replace e (Rule p e') = do
+  b <- matchPattern e p
+  return $ if null b
+    then e
+    else applyBindings (head b) e'
 \end{code}
 
 \end{document}

@@ -27,6 +27,7 @@ data BuiltinSymbol =
   | Factorial2
   | False
   | Flat
+  | Flatten
   | Function
   | Get
   | Greater
@@ -75,9 +76,10 @@ data BuiltinSymbol =
   | Put
   | PutAppend
   | Repeated
-  | ReplaceRepeated
-  | RepeatedNull
+  | Replace
   | ReplaceAll
+  | RepeatedNull
+  | ReplaceRepeated
   | Rule
   | RuleDelayed
   | RuleRepeated
