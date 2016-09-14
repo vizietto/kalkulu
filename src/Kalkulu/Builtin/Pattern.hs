@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedLists #-}
 
-module Kalkulu.Builtin.Pattern(matchQ,
+module Kalkulu.Builtin.Pattern(holdPattern,
+                               matchQ,
                                rule,
                                ruleDelayed,
                                replace) where
@@ -11,6 +12,11 @@ import Kalkulu.Builtin
 import Kalkulu.Pattern (matchPattern, toPattern, toRule)
 import qualified Kalkulu.Pattern as Pattern
 import qualified Kalkulu.BuiltinSymbol as B
+
+holdPattern :: BuiltinDefinition
+holdPattern = defaultBuiltin {
+  attributes = [HoldAll, Protected]
+  }
 
 matchQ :: BuiltinDefinition
 matchQ = defaultBuiltin {

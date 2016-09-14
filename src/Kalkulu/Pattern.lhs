@@ -117,6 +117,7 @@ toPattern (CmpB B.Alternative args) =
   Alternative (map toPattern $ V.toList args)
 toPattern (CmpB B.Optional [p]) = Optional1 (toPattern p)
 toPattern (CmpB B.Optional [p, opt]) = Optional2 (toPattern p) opt
+toPattern (CmpB B.HoldPattern [e]) = toPattern e
 toPattern (Cmp h args) =
   PatternCmp (toPattern h) (map toPattern $ V.toList args)
 toPattern e = Expression e

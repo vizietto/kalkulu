@@ -75,6 +75,7 @@ defaultEnvironment = Environment
         def B.False = toDefinition Kalkulu.Builtin.Logic.false
         def B.Flatten = toDefinition Kalkulu.Builtin.Flatten.flatten
         def B.Head = toDefinition Kalkulu.Builtin.Head.head_
+        def B.HoldPattern = toDefinition Kalkulu.Builtin.Pattern.holdPattern
         def B.Indeterminate = toDefinition Kalkulu.Builtin.Indeterminate.indeterminate
         def B.If = toDefinition Kalkulu.Builtin.If.if_
         def B.Length = toDefinition Kalkulu.Builtin.Length.length_
