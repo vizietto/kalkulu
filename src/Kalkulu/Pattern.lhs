@@ -21,6 +21,7 @@ import qualified ListT
 import ListT (ListT(..))
 import qualified Data.Vector as V
 import Data.List (inits, tails, permutations)
+import Debug.Trace
 \end{code}
 
 \section{Patterns}
@@ -50,6 +51,8 @@ data Pattern =
   | Alternative             [Pattern]           -- a|b|c|..
   | Optional1               Pattern             -- Optional[p]
   | Optional2               Pattern Expression  -- Optional[p, e]
+  | Repeated                Pattern             -- p..
+  | RepeatedNull            Pattern             -- p...
   | Expression              Expression          -- e
   | PatternCmp              Pattern [Pattern]   -- p[p1, ..]
   deriving Show -- for debbuging
@@ -99,9 +102,11 @@ instance ToExpression Pattern where
   toExpression (Alternative es) = CmpB B.Alternative (V.fromList $ map toExpression es)
   toExpression (Optional1 p) = CmpB B.Optional [toExpression p]
   toExpression (Optional2 p e) = CmpB B.Optional [toExpression p, e]
+  toExpression (Repeated p) = CmpB B.Repeated [toExpression p]
+  toExpression (RepeatedNull p) = CmpB B.RepeatedNull [toExpression p]
   toExpression (PatternCmp h as) =
     Cmp (toExpression h) (V.fromList $ map toExpression as)
-  toExpression (Expression e) = e -- TODO: add Verbatim
+  toExpression (Expression e) = e -- TODO: add Verbatim if needed
 \end{code}
 \begin{code}
 toPattern :: Expression -> Pattern
@@ -117,6 +122,8 @@ toPattern (CmpB B.Alternative args) =
   Alternative (map toPattern $ V.toList args)
 toPattern (CmpB B.Optional [p]) = Optional1 (toPattern p)
 toPattern (CmpB B.Optional [p, opt]) = Optional2 (toPattern p) opt
+toPattern (CmpB B.Repeated [p]) = Repeated (toPattern p)
+toPattern (CmpB B.RepeatedNull [p]) = RepeatedNull (toPattern p)
 toPattern (CmpB B.HoldPattern [e]) = toPattern e
 toPattern (Cmp h args) =
   PatternCmp (toPattern h) (map toPattern $ V.toList args)
@@ -365,7 +372,7 @@ match _ (Expression _) _ _ = mzero
 match es (Optional1 p) Nothing req = match es p Nothing req
 match es (Optional1 pat@(Pattern s _)) (Just s') req =
   bindings `mplus` optionalBindings
-  where bindings = match es pat (Just s') req
+  where bindings = trace (show es) $ match es pat (Just s') req
         optionalBindings = do Just def <- getDefault s'
                               let Just req' = insert req (s, Unique def)
                               return (req', Unique def)
@@ -384,8 +391,11 @@ match es (Optional2 p def) lhs req =
 To change (\verb?MatchQ[b, a_. + b] == True?).
 \begin{code}
 match [e@(Cmp h as)] (PatternCmp h' ps) _ req = do
-  (req', _) <- match [h] h' Nothing req -- TODO: Nothing?
-  req'' <- matchMany (V.toList as) ps Nothing req'
+  let hd = case h of
+        Symbol s -> Just s
+        _        -> Nothing
+  (req', _) <- match [h] h' hd req -- TODO: hd?
+  req'' <- matchMany (V.toList as) ps hd req'
   return (req'', Unique e)
 match _ (PatternCmp _ _) _ _ = mzero
 -- match [e@(Cmp h as)] (PatternCmp h' ps) _ req = do

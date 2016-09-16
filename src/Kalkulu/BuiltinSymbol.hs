@@ -43,6 +43,7 @@ data BuiltinSymbol =
   | Increment
   | Indeterminate
   | Inequality
+  | Infinity
   | Integer
   | Length
   | Less
@@ -76,9 +77,9 @@ data BuiltinSymbol =
   | Put
   | PutAppend
   | Repeated
+  | RepeatedNull
   | Replace
   | ReplaceAll
-  | RepeatedNull
   | ReplaceRepeated
   | Rule
   | RuleDelayed

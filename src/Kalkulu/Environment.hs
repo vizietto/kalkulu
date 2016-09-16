@@ -17,6 +17,7 @@ import qualified Kalkulu.Builtin as BD
 
 import qualified Kalkulu.Builtin.AtomQ
 import qualified Kalkulu.Builtin.Attributes
+import qualified Kalkulu.Builtin.Evaluate
 import qualified Kalkulu.Builtin.Flatten
 import qualified Kalkulu.Builtin.Head
 import qualified Kalkulu.Builtin.Indeterminate
@@ -72,6 +73,7 @@ defaultEnvironment = Environment
         def B.And = toDefinition Kalkulu.Builtin.Logic.and_
         def B.AtomQ = toDefinition Kalkulu.Builtin.AtomQ.atomQ
         def B.Attributes = toDefinition Kalkulu.Builtin.Attributes.attributes_
+        def B.Evaluate = toDefinition Kalkulu.Builtin.Evaluate.evaluate_
         def B.False = toDefinition Kalkulu.Builtin.Logic.false
         def B.Flatten = toDefinition Kalkulu.Builtin.Flatten.flatten
         def B.Head = toDefinition Kalkulu.Builtin.Head.head_
@@ -114,6 +116,7 @@ run env action =
           , downcode = return . id
           , subcode  = return . id
           } in proceed $ next $ emptyBuiltinCode
+  Free (GetDefault s next) -> proceed $ next (Just $ BD.toExpression (0::Integer)) -- TODO
   Free (HasAttribute s at next) -> do
     def <- getDef env s
     attrs <- readIORef (attributes def)
