@@ -63,6 +63,7 @@ data BuiltinSymbol =
   | NumericFunction
   | OneIdentity
   | Optional
+  | OptionsPattern
   | Or
   | Orderless
   | Out
@@ -80,6 +81,7 @@ data BuiltinSymbol =
   | RepeatedNull
   | Replace
   | ReplaceAll
+  | ReplaceList
   | ReplaceRepeated
   | Rule
   | RuleDelayed

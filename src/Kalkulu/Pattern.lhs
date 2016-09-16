@@ -444,12 +444,17 @@ toRule (CmpB rule [p, e]) | rule == B.Rule || rule == B.RuleDelayed
   = Just $ Rule (toPattern p) e
 toRule _ = Nothing
 
-replace :: Expression -> Rule -> Kernel Expression
-replace e (Rule p e') = do
-  b <- matchPattern e p
+replace :: Rule -> Expression -> Kernel Expression
+replace (Rule p e) e' = do
+  b <- matchPattern e' p
   return $ if null b
     then e
-    else applyBindings (head b) e'
+    else applyBindings (head b) e
+
+replaceList :: Rule -> Expression -> Kernel Expression
+replaceList (Rule p e) e' = do
+  bs <- matchPattern e' p
+  return $ toExpression $ map (\b -> applyBindings b e) bs
 \end{code}
 
 \end{document}
