@@ -235,6 +235,9 @@ compareExpr _         (Cmp _ _) = LT
 class ToExpression a where
   toExpression :: a -> Expression
 
+instance ToExpression () where
+  toExpression ()    = SymbolB B.Null
+
 instance ToExpression Bool where
   toExpression True  = SymbolB B.True
   toExpression False = SymbolB B.False

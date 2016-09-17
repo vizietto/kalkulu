@@ -17,11 +17,11 @@ controlBuiltins = [
   -- , (B.Throw, throw)
   -- , (B.Goto, goto)
   -- , (B.Label, label)
-  -- , (B.If, if_)
+  , (B.If, if_)
   -- , (B.Switch, switch)
   -- , (B.Which, which)
   -- , (B.Do, do_)
-  -- , (B.For, for)
+  , (B.For, for)
   -- , (B.While, while)
   -- , (B.Nest, nest)
   -- , (B.NestList, nestList)
@@ -66,3 +66,21 @@ pureIf (Cmp _ [SymbolB B.True, a, _, _])  = a
 pureIf (Cmp _ [SymbolB B.False, _, a, _]) = a
 pureIf (Cmp _ [_, _, _, a])               = a
 pureIf e                                  = e
+
+for :: BuiltinDefinition
+for = defaultBuiltin {
+    attributes = [HoldAll, Protected]
+  , downcode   = downcodeFor -- TODO 3 or 4 arguments
+  }
+
+downcodeFor :: Expression -> Kernel Expression
+downcodeFor (Cmp _ [a, b, c, d]) = codeFor a b c d
+downcodeFor (Cmp _ [a, b, c])    = codeFor a b c (SymbolB B.Null)
+downcodeFor _                    = error "unreachable"
+
+codeFor :: Expression -> Expression -> Expression -> Expression -> Kernel Expression
+codeFor start test incr body = evaluate start >> doLoop
+  where doLoop = do test' <- evaluate test
+                    if test' == toExpression True
+                      then evaluate body >> evaluate incr >> doLoop
+                      else return $ toExpression ()
