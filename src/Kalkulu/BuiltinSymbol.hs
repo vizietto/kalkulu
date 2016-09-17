@@ -8,29 +8,39 @@ data BuiltinSymbol =
   | All
   | Alternative
   | And
+  | Append
+  | AppendTo
   | Apply
+  | Array
   | AtomQ
   | Attributes
   | Blank
   | BlankNullSequence
   | BlankSequence
   | Break
+  | Cases
   | Catch
+  | Catenate
   | Condition
   | Constant
+  | ConstantArray
   | Continue
   | Composition
   | CompoundExpression
   | Decrement
+  | DeleteCases
   | Derivative
   | DivideBy
   | Do
   | Dot
+  | Drop
   | Equal
   | Evaluate
+  | Extract
   | Factorial
   | Factorial2
   | False
+  | First
   | FixedPoint
   | FixedPointList
   | Flat
@@ -56,23 +66,29 @@ data BuiltinSymbol =
   | Inequality
   | Infinity
   | Integer
+  | Join
   | Label
+  | Last
   | Length
   | Less
   | LessEqual
   | List
   | Listable
+  | ListQ
   | Locked
   | Map
   | MapAll
   | MatchQ
+  | MemberQ
   | MessageName
+  | Most
   | Nest
   | NestList
   | NestWhile
   | NHoldAll
   | NHoldRest
   | NonCommutativeMultiply
+  | None
   | Not
   | Null
   | NumericFunction
@@ -83,13 +99,17 @@ data BuiltinSymbol =
   | Orderless
   | Out
   | Part
+  | Partition
   | Pattern
   | PatternTest
   | Plus
+  | Position
+  | Power
   | PreDecrement
   | PreIncrement
+  | Prepend
+  | PrependTo
   | Protected
-  | Power
   | Put
   | PutAppend
   | ReleaseHold
@@ -99,10 +119,12 @@ data BuiltinSymbol =
   | ReplaceAll
   | ReplaceList
   | ReplaceRepeated
+  | Rest
   | Rule
   | RuleDelayed
   | RuleRepeated
   | SameQ
+  | Select
   | Sequence
   | SequenceHold
   | Set
@@ -110,6 +132,8 @@ data BuiltinSymbol =
   | Slot
   | SlotSequence
   | Span
+  | Split
+  | SplitBy
   | String
   | StringExpression
   | StringJoin
@@ -117,11 +141,13 @@ data BuiltinSymbol =
   | SubtractFrom
   | Switch
   | Symbol
+  | Take
   | Temporary
   | Throw
   | Times
   | TimesBy
   | True
+  | Tuples
   | Unequal
   | Unevaluated
   | UnsameQ
