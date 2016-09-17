@@ -20,11 +20,12 @@ import qualified Kalkulu.Builtin.Attributes
 import qualified Kalkulu.Builtin.Indeterminate
 import qualified Kalkulu.Builtin.Plus
 import qualified Kalkulu.Builtin.Times
+import Kalkulu.Builtin.Comparison
 import Kalkulu.Builtin.Control
 import Kalkulu.Builtin.Evaluation
 import Kalkulu.Builtin.Function
 import Kalkulu.Builtin.List
-import Kaklulu.Builtin.Logic
+import Kalkulu.Builtin.Logic
 import Kalkulu.Builtin.Pattern
 import Kalkulu.Kernel
 
@@ -71,7 +72,7 @@ defaultEnvironment = Environment
                         <*> sequence [(,) b <$> toDefinition c| (b, c) <- otherBuiltins]
         otherBuiltins = patternBuiltins ++ controlBuiltins ++
           evaluationBuiltins ++ listBuiltins ++ functionBuiltins ++
-          logicBuiltins
+          logicBuiltins ++ comparisonBuiltins
         def B.AtomQ = toDefinition Kalkulu.Builtin.AtomQ.atomQ
         def B.Attributes = toDefinition Kalkulu.Builtin.Attributes.attributes_
         def B.Indeterminate = toDefinition Kalkulu.Builtin.Indeterminate.indeterminate

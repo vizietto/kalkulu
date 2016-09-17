@@ -150,6 +150,7 @@ data BuiltinSymbol =
   | Times
   | TimesBy
   | True
+  | TrueQ
   | Tuples
   | Unequal
   | Unevaluated

@@ -1,11 +1,10 @@
 {-# LANGUAGE OverloadedLists #-}
 
-module Kalkulu.Builtin.Logic(logicBuiltins) where
+module Kalkulu.Builtin.Logic (logicBuiltins) where
 
 import Kalkulu.Builtin
 import qualified Kalkulu.BuiltinSymbol as B
 import qualified Data.Vector as V
-import Kalkulu.VectorPattern
 
 logicBuiltins :: [(B.BuiltinSymbol, BuiltinDefinition)]
 logicBuiltins = [
@@ -13,7 +12,6 @@ logicBuiltins = [
   , (B.False, false)
   , (B.And, and_)
   -- , (B.Or, or_)
-  , (B.SameQ, sameQ)
   ]
 
 true :: BuiltinDefinition
@@ -46,11 +44,3 @@ downcodeAnd (Cmp _ args) = do
     Nothing -> toExpression False
     Just [] -> toExpression True
     Just es -> CmpB B.And (V.fromList es)
-
-sameQ :: BuiltinDefinition
-sameQ = defaultBuiltin { downcode = return . toExpression . pureSameQ }
-
-pureSameQ :: Expression -> Bool
-pureSameQ (Cmp _ [])       = True
-pureSameQ (Cmp _ (h :< t)) = all (== h) t
-pureSameQ _                = error "unreachable"

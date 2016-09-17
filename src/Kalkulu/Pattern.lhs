@@ -448,7 +448,7 @@ replace :: Rule -> Expression -> Kernel Expression
 replace (Rule p e) e' = do
   b <- matchPattern e' p
   return $ if null b
-    then e
+    then e'
     else applyBindings (head b) e
 
 replaceList :: Rule -> Expression -> Kernel Expression

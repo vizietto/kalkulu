@@ -17,12 +17,13 @@ patternBuiltins = [
   , (B.Rule, rule)
   , (B.RuleDelayed, ruleDelayed)
   , (B.Replace, replace)
-  , (B.ReplaceRepeated, replaceRepeated)
+  -- , (B.ReplaceAll, replaceAll)
+  -- , (B.ReplaceRepeated, replaceRepeated)
   , (B.ReplaceList, replaceList)
   , (B.PatternTest, patternTest)
   , (B.Pattern, pattern)
   , (B.Condition, condition)
-  , (B.OptionsPattern, optionsPattern)
+  -- , (B.OptionsPattern, optionsPattern)
   ]
 
 holdPattern :: BuiltinDefinition
@@ -77,16 +78,8 @@ downcodeReplace e = return e
 subcodeReplace :: Expression -> Kernel Expression
 subcodeReplace (Cmp (Cmp _ [r]) [e]) = return $ CmpB B.Replace [e, r]
 
-replaceAll :: BuiltinDefinition
-replaceAll = undefined -- TODO
-
-replaceRepeated :: BuiltinDefinition
-replaceRepeated = undefined -- TODO
-
 replaceList :: BuiltinDefinition
-replaceList = defaultBuiltin {
-  downcode = downcodeReplaceList
-  }
+replaceList = defaultBuiltin { downcode = downcodeReplaceList }
 
 downcodeReplaceList :: Expression -> Kernel Expression
 downcodeReplaceList exp@(Cmp _ [e, r]) = case toRule r of
@@ -101,6 +94,3 @@ pattern = defaultBuiltin { attributes = [HoldFirst, Protected] }
 
 condition :: BuiltinDefinition
 condition = defaultBuiltin { attributes = [HoldAll, Protected]}
-
-optionsPattern :: BuiltinDefinition
-optionsPattern = undefined -- TODO
