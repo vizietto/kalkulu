@@ -18,14 +18,13 @@ import qualified Kalkulu.Builtin as BD
 import qualified Kalkulu.Builtin.AtomQ
 import qualified Kalkulu.Builtin.Attributes
 import qualified Kalkulu.Builtin.Indeterminate
-import qualified Kalkulu.Builtin.Logic
 import qualified Kalkulu.Builtin.Plus
 import qualified Kalkulu.Builtin.Times
-import qualified Kalkulu.Builtin.SameQ
 import Kalkulu.Builtin.Control
 import Kalkulu.Builtin.Evaluation
 import Kalkulu.Builtin.Function
 import Kalkulu.Builtin.List
+import Kaklulu.Builtin.Logic
 import Kalkulu.Builtin.Pattern
 import Kalkulu.Kernel
 
@@ -71,16 +70,13 @@ defaultEnvironment = Environment
         builtins = (++) <$> sequence [(,) b <$> def b | b <- [minBound..]]
                         <*> sequence [(,) b <$> toDefinition c| (b, c) <- otherBuiltins]
         otherBuiltins = patternBuiltins ++ controlBuiltins ++
-          evaluationBuiltins ++ listBuiltins ++ functionBuiltins
-        def B.And = toDefinition Kalkulu.Builtin.Logic.and_
+          evaluationBuiltins ++ listBuiltins ++ functionBuiltins ++
+          logicBuiltins
         def B.AtomQ = toDefinition Kalkulu.Builtin.AtomQ.atomQ
         def B.Attributes = toDefinition Kalkulu.Builtin.Attributes.attributes_
-        def B.False = toDefinition Kalkulu.Builtin.Logic.false
         def B.Indeterminate = toDefinition Kalkulu.Builtin.Indeterminate.indeterminate
         def B.Plus = toDefinition Kalkulu.Builtin.Plus.plus
         def B.Times = toDefinition Kalkulu.Builtin.Times.times
-        def B.True = toDefinition Kalkulu.Builtin.Logic.true
-        def B.SameQ = toDefinition Kalkulu.Builtin.SameQ.sameQ
         def _    = emptyDefinition
 
 run :: Environment -> Kernel a -> IO a
