@@ -16,16 +16,17 @@ controlBuiltins = [
   -- , (B.Catch, catch)
   -- , (B.Throw, throw)
   -- , (B.Goto, goto)
-  -- , (B.Label, label)
+  , (B.Label, label)
   , (B.If, if_)
   -- , (B.Switch, switch)
   -- , (B.Which, which)
   -- , (B.Do, do_)
   , (B.For, for)
-  -- , (B.While, while)
-  -- , (B.Nest, nest)
-  -- , (B.NestList, nestList)
+  , (B.While, while)
+  , (B.Nest, nest)
+  , (B.NestList, nestList)
   -- , (B.NestWhile, nestWhile)
+  -- , (B.NestWhileList, nestWhileList)
   -- , (B.FixedPoint, fixedPoint)
   -- , (B.FixedPointList, fixedPointList)
   -- , (B.Abort, abort)
@@ -48,24 +49,23 @@ downcodeCompoundExpression (Cmp _ args) = do
 if_ :: BuiltinDefinition
 if_ = defaultBuiltin {
   attributes = [HoldRest, Protected],
-  downcode   = downcodeIf
+  downcode   = return . pureIf -- TODO: between 2 and 4 args
   }
 
-downcodeIf :: Expression -> Kernel Expression
-downcodeIf e@(Cmp _ args) = do
-  when (length args < 2 || length args > 4) (return ()) -- sendMessage
-  return $ pureIf e
-downcodeIf _ = error "unreachable"
+label :: BuiltinDefinition
+label = defaultBuiltin {
+  attributes = [HoldFirst, Protected]
+  }
 
 pureIf :: Expression -> Expression
 pureIf (Cmp _ [SymbolB B.True, a])        = a
-pureIf (Cmp _ [SymbolB B.False, _])       = SymbolB B.Null
+pureIf (Cmp _ [SymbolB B.False, _])       = toExpression ()
 pureIf (Cmp _ [SymbolB B.True, a, _])     = a
 pureIf (Cmp _ [SymbolB B.False, _, a])    = a
 pureIf (Cmp _ [SymbolB B.True, a, _, _])  = a
 pureIf (Cmp _ [SymbolB B.False, _, a, _]) = a
 pureIf (Cmp _ [_, _, _, a])               = a
-pureIf e                                  = e
+pureIf _                                  = error "unreachable"
 
 for :: BuiltinDefinition
 for = defaultBuiltin {
@@ -75,7 +75,7 @@ for = defaultBuiltin {
 
 downcodeFor :: Expression -> Kernel Expression
 downcodeFor (Cmp _ [a, b, c, d]) = codeFor a b c d
-downcodeFor (Cmp _ [a, b, c])    = codeFor a b c (SymbolB B.Null)
+downcodeFor (Cmp _ [a, b, c])    = codeFor a b c (toExpression ())
 downcodeFor _                    = error "unreachable"
 
 codeFor :: Expression -> Expression -> Expression -> Expression -> Kernel Expression
@@ -84,3 +84,40 @@ codeFor start test incr body = evaluate start >> doLoop
                     if test' == toExpression True
                       then evaluate body >> evaluate incr >> doLoop
                       else return $ toExpression ()
+while :: BuiltinDefinition
+while = defaultBuiltin {
+    attributes = [HoldAll, Protected]
+  , downcode   = downcodeWhile -- TODO: 1 or 2 args
+  }
+
+downcodeWhile :: Expression -> Kernel Expression
+downcodeWhile (Cmp _ [a, b]) = codeWhile a b
+downcodeWhile (Cmp _ [a])    = codeWhile a (toExpression ())
+downcodeWhile _              = error "unreachable"
+
+codeWhile :: Expression -> Expression -> Kernel Expression
+codeWhile test body = do test' <- evaluate test
+                         if test' == toExpression True
+                           then evaluate body >> codeWhile test body
+                           else return $ toExpression ()
+
+nest :: BuiltinDefinition
+nest = defaultBuiltin {
+  downcode = downcodeNest -- TODO: 3 args
+  }
+
+downcodeNest :: Expression -> Kernel Expression
+downcodeNest (Cmp _ [f, x, Number n]) | n >= 0
+  = return $ (iterate (Cmp f . V.singleton) x) !! (fromInteger n)
+downcodeNest e = return e
+
+nestList :: BuiltinDefinition
+nestList = defaultBuiltin {
+  downcode = downcodeNestList -- TODO: 3 args
+  }
+
+downcodeNestList :: Expression -> Kernel Expression
+downcodeNestList (Cmp _ [f, x, Number n]) | n >= 0
+  = return $ toExpression $ take (fromIntegral n)
+                                 (iterate (Cmp f . V.singleton) x)
+downcodeNestList e = return e
