@@ -17,16 +17,16 @@ import qualified Kalkulu.Builtin as BD
 
 import qualified Kalkulu.Builtin.AtomQ
 import qualified Kalkulu.Builtin.Attributes
-import qualified Kalkulu.Builtin.Evaluate
 import qualified Kalkulu.Builtin.Flatten
 import qualified Kalkulu.Builtin.Head
 import qualified Kalkulu.Builtin.Indeterminate
-import qualified Kalkulu.Builtin.If
 import qualified Kalkulu.Builtin.Logic
 import qualified Kalkulu.Builtin.Plus
 import qualified Kalkulu.Builtin.Times
 import qualified Kalkulu.Builtin.SameQ
 import qualified Kalkulu.Builtin.Length
+import Kalkulu.Builtin.Control
+import Kalkulu.Builtin.Evaluation
 import Kalkulu.Builtin.Pattern
 import Kalkulu.Kernel
 
@@ -71,22 +71,17 @@ defaultEnvironment = Environment
   where builtins :: IO [(B.BuiltinSymbol, Definition)]
         builtins = (++) <$> sequence [(,) b <$> def b | b <- [minBound..]]
                         <*> sequence [(,) b <$> toDefinition c| (b, c) <- otherBuiltins]
-        otherBuiltins = patternBuiltins
+        otherBuiltins = patternBuiltins ++ controlBuiltins ++
+          evaluationBuiltins
         def B.And = toDefinition Kalkulu.Builtin.Logic.and_
         def B.AtomQ = toDefinition Kalkulu.Builtin.AtomQ.atomQ
         def B.Attributes = toDefinition Kalkulu.Builtin.Attributes.attributes_
-        def B.Evaluate = toDefinition Kalkulu.Builtin.Evaluate.evaluate_
         def B.False = toDefinition Kalkulu.Builtin.Logic.false
         def B.Flatten = toDefinition Kalkulu.Builtin.Flatten.flatten
         def B.Head = toDefinition Kalkulu.Builtin.Head.head_
-        --def B.HoldPattern = toDefinition Kalkulu.Builtin.Pattern.holdPattern
         def B.Indeterminate = toDefinition Kalkulu.Builtin.Indeterminate.indeterminate
-        def B.If = toDefinition Kalkulu.Builtin.If.if_
         def B.Length = toDefinition Kalkulu.Builtin.Length.length_
         def B.Plus = toDefinition Kalkulu.Builtin.Plus.plus
-        --def B.Replace = toDefinition Kalkulu.Builtin.Pattern.replace
-        --def B.Rule = toDefinition Kalkulu.Builtin.Pattern.rule
-        --def B.RuleDelayed = toDefinition Kalkulu.Builtin.Pattern.ruleDelayed
         def B.Times = toDefinition Kalkulu.Builtin.Times.times
         def B.True = toDefinition Kalkulu.Builtin.Logic.true
         def B.SameQ = toDefinition Kalkulu.Builtin.SameQ.sameQ

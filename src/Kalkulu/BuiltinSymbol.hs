@@ -3,7 +3,8 @@ module Kalkulu.BuiltinSymbol where
 import Data.Array (Ix)
 
 data BuiltinSymbol =
-    AddTo
+    Abort
+  | AddTo
   | All
   | Alternative
   | And
@@ -13,30 +14,40 @@ data BuiltinSymbol =
   | Blank
   | BlankNullSequence
   | BlankSequence
+  | Break
+  | Catch
   | Condition
   | Constant
+  | Continue
   | Composition
   | CompoundExpression
   | Decrement
   | Derivative
   | DivideBy
+  | Do
   | Dot
   | Equal
   | Evaluate
   | Factorial
   | Factorial2
   | False
+  | FixedPoint
+  | FixedPointList
   | Flat
   | Flatten
+  | For
   | Function
   | Get
+  | Goto
   | Greater
   | GreaterEqual
   | Head
   | Hold
   | HoldAll
   | HoldAllComplete
+  | HoldComplete
   | HoldFirst
+  | HoldForm
   | HoldPattern
   | HoldRest
   | If
@@ -45,6 +56,7 @@ data BuiltinSymbol =
   | Inequality
   | Infinity
   | Integer
+  | Label
   | Length
   | Less
   | LessEqual
@@ -55,6 +67,9 @@ data BuiltinSymbol =
   | MapAll
   | MatchQ
   | MessageName
+  | Nest
+  | NestList
+  | NestWhile
   | NHoldAll
   | NHoldRest
   | NonCommutativeMultiply
@@ -77,6 +92,7 @@ data BuiltinSymbol =
   | Power
   | Put
   | PutAppend
+  | ReleaseHold
   | Repeated
   | RepeatedNull
   | Replace
@@ -99,14 +115,19 @@ data BuiltinSymbol =
   | StringJoin
   | Stub
   | SubtractFrom
+  | Switch
   | Symbol
   | Temporary
+  | Throw
   | Times
   | TimesBy
   | True
   | Unequal
+  | Unevaluated
   | UnsameQ
   | Unset
   | UpSet
   | UpSetDelayed
+  | Which
+  | While
   deriving (Bounded, Enum, Eq, Ix, Ord, Show)
