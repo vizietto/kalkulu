@@ -60,12 +60,14 @@ data BuiltinSymbol =
   | HoldForm
   | HoldPattern
   | HoldRest
+  | Identity
   | If
   | Increment
   | Indeterminate
   | Inequality
   | Infinity
   | Integer
+  | InverseFunction
   | Join
   | Label
   | Last
@@ -120,6 +122,7 @@ data BuiltinSymbol =
   | ReplaceList
   | ReplaceRepeated
   | Rest
+  | Return
   | Rule
   | RuleDelayed
   | RuleRepeated

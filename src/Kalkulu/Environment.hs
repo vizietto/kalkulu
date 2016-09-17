@@ -24,6 +24,7 @@ import qualified Kalkulu.Builtin.Times
 import qualified Kalkulu.Builtin.SameQ
 import Kalkulu.Builtin.Control
 import Kalkulu.Builtin.Evaluation
+import Kalkulu.Builtin.Function
 import Kalkulu.Builtin.List
 import Kalkulu.Builtin.Pattern
 import Kalkulu.Kernel
@@ -70,7 +71,7 @@ defaultEnvironment = Environment
         builtins = (++) <$> sequence [(,) b <$> def b | b <- [minBound..]]
                         <*> sequence [(,) b <$> toDefinition c| (b, c) <- otherBuiltins]
         otherBuiltins = patternBuiltins ++ controlBuiltins ++
-          evaluationBuiltins ++ listBuiltins
+          evaluationBuiltins ++ listBuiltins ++ functionBuiltins
         def B.And = toDefinition Kalkulu.Builtin.Logic.and_
         def B.AtomQ = toDefinition Kalkulu.Builtin.AtomQ.atomQ
         def B.Attributes = toDefinition Kalkulu.Builtin.Attributes.attributes_

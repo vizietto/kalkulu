@@ -80,10 +80,17 @@ downcodeFor _                    = error "unreachable"
 
 codeFor :: Expression -> Expression -> Expression -> Expression -> Kernel Expression
 codeFor start test incr body = evaluate start >> doLoop
-  where doLoop = do test' <- evaluate test
-                    if test' == toExpression True
-                      then evaluate body >> evaluate incr >> doLoop
-                      else return $ toExpression ()
+  where doLoop = do
+          test' <- evaluate test
+          if test' == toExpression True
+            then do b <- evaluate body
+                    case b of
+                      CmpB B.Return [a] -> return a
+                      CmpB B.Return [a, SymbolB B.For] -> return a
+                      e@(CmpB B.Return [_, _]) -> return e
+                      _ -> evaluate incr >> doLoop
+            else return $ toExpression ()
+            
 while :: BuiltinDefinition
 while = defaultBuiltin {
     attributes = [HoldAll, Protected]
@@ -96,10 +103,16 @@ downcodeWhile (Cmp _ [a])    = codeWhile a (toExpression ())
 downcodeWhile _              = error "unreachable"
 
 codeWhile :: Expression -> Expression -> Kernel Expression
-codeWhile test body = do test' <- evaluate test
-                         if test' == toExpression True
-                           then evaluate body >> codeWhile test body
-                           else return $ toExpression ()
+codeWhile test body = do
+  test' <- evaluate test
+  if test' == toExpression True
+    then do b <- evaluate body
+            case b of
+              CmpB B.Return [x] -> return x
+              CmpB B.Return [x, SymbolB B.While] -> return x
+              e@(CmpB B.Return [_, _]) -> return e
+              _ -> codeWhile test body
+    else return $ toExpression ()
 
 nest :: BuiltinDefinition
 nest = defaultBuiltin {
