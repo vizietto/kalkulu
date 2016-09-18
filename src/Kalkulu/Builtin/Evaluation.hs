@@ -60,7 +60,8 @@ pureReleaseHold (Cmp _ [CmpB h [e]])
 pureReleaseHold (Cmp _ [CmpB h args])
   | h == B.Hold || h == B.HoldForm ||
     h == B.HoldPattern || h == B.HoldComplete = CmpB B.Sequence args
-pureReleaseHold e = e
+pureReleaseHold (Cmp _ [e]) = e
+pureReleaseHold _ = error "unreachable"
 
 sequence__ :: BuiltinDefinition
 sequence__ = defaultBuiltin
