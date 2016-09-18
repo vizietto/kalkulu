@@ -283,10 +283,10 @@ evaluate e = do
   limit <- getIterationLimit
   repeatEval limit e
   where repeatEval :: Maybe Int -> Expression -> Kernel Expression
-        repeatEval (Just 0) e = return $ CmpB B.Hold [e]
-        repeatEval n e = do
-          e' <- eval e
-          if e == e' then return e
+        repeatEval (Just 0) expr = return $ CmpB B.Hold [expr]
+        repeatEval n expr = do
+          e' <- eval expr
+          if expr == e' then return expr
                      else repeatEval (n >>= return . (+ 1)) e'
 
 eval :: Expression -> Kernel Expression

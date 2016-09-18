@@ -2,11 +2,8 @@
 
 module Kalkulu.Builtin.List (listBuiltins) where
 
-import Control.Monad
-
 import qualified Data.Vector as V
 import Kalkulu.Builtin
-import qualified Kalkulu.Pattern as Pattern
 import qualified Kalkulu.BuiltinSymbol as B
 
 listBuiltins :: [(B.BuiltinSymbol, BuiltinDefinition)]
@@ -84,6 +81,7 @@ list = defaultBuiltin {
   attributes = [Locked, Protected]
   }
 
+listQ :: BuiltinDefinition
 listQ = defaultBuiltin {
   downcode = return . toExpression . pureListQ -- TODO: oneArg
   }
@@ -125,7 +123,7 @@ part = defaultBuiltin {
 
 downcodePart :: Expression -> Kernel Expression
 downcodePart (Cmp _ [e, Number 0]) = return $ getHead e
-downcodePart e@(Cmp _ [Cmp h args, Number i]) =
+downcodePart e@(Cmp _ [Cmp _ args, Number i]) =
   let i' = fromInteger i in
   let j = if i' > 0 then i'-1 else length args + i' in
   case args V.!? j of
@@ -146,4 +144,4 @@ flattenHead :: Expression -> V.Vector Expression -> V.Vector Expression
 flattenHead h = V.concatMap (help h)
   where help h e@(Cmp h' as)
           | h == h'   = flattenHead h as
-        help h e = V.singleton e
+        help _ e = V.singleton e

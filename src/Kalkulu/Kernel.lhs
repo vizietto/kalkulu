@@ -15,6 +15,7 @@ import Data.List (intercalate)
 import Data.List.Split (splitWhen)
 import Control.Monad.Identity
 import Control.Monad.Morph
+import Control.Monad.Trans.Except
 import Control.Monad.Trans.Free
 import Control.Monad.Trans.Writer
 import ListT (ListT)
@@ -121,6 +122,19 @@ instance (Monoid w, MonadEnv m) => MonadEnv (WriterT w m) where
   getCurrentContext  = lift getCurrentContext
   getContextPath     = lift getContextPath
 
+instance MonadEnv m => MonadEnv (ExceptT e m) where
+  getSymbolMaybe c s = lift $ getSymbolMaybe c s
+  createSymbol   c s = lift $ createSymbol c s
+  getBuiltinCode     = lift . getBuiltinCode
+  getDefault s       = lift $ getDefault s
+  hasAttribute s a   = lift $ hasAttribute s a
+  getIterationLimit  = lift getIterationLimit
+  setIterationLimit  = lift . setIterationLimit
+  getRecursionLimit  = lift getRecursionLimit
+  setRecursionLimit  = lift . setRecursionLimit
+  getCurrentContext  = lift getCurrentContext
+  getContextPath     = lift getContextPath
+
 instance MonadEnv m => MonadEnv (ListT m) where
   getSymbolMaybe c s = lift $ getSymbolMaybe c s
   createSymbol   c s = lift $ createSymbol c s
@@ -193,7 +207,12 @@ data LogExpression = LogItem     Expression
 pack :: [LogExpression] -> [LogExpression]
 pack s = [LogSequence s]
 
-type KernelT m = WriterT [LogExpression] (FreeT Action m)
+data Exception =
+    ThrowException Expression
+  | BreakException
+  | ContinueException
+
+type KernelT m = ExceptT Exception (WriterT [LogExpression] (FreeT Action m))
         
 type Kernel a = KernelT Identity a 
 \end{code}

@@ -6,6 +6,7 @@ module Kalkulu.Environment (defaultEnvironment,
 
 import Control.Monad.Identity
 import Control.Monad.Trans
+import Control.Monad.Trans.Except
 import Control.Monad.Trans.Free
 import Control.Monad.Trans.Writer
 import Data.IORef
@@ -80,10 +81,13 @@ defaultEnvironment = Environment
         def B.Times = toDefinition Kalkulu.Builtin.Times.times
         def _    = emptyDefinition
 
+right :: Either e a -> a
+right (Right x) = x
+
 run :: Environment -> Kernel a -> IO a
 run env action =
-  let proceed = run env . lift in
-  case runIdentity $ runFreeT $ fmap fst $ runWriterT action of
+  let proceed = run env . lift . lift in
+  case runIdentity $ runFreeT $ fmap fst $ runWriterT $ fmap right $ runExceptT action of
   Pure x -> return x
   Free (GetSymbolMaybe c s next) -> do
     table <- readIORef (symbolTable env)
