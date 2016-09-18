@@ -12,7 +12,7 @@ controlBuiltins :: [(B.BuiltinSymbol, BuiltinDefinition)]
 controlBuiltins = [
     (B.CompoundExpression, compoundExpression)
   -- , (B.Return, return_)
-  -- , (B.Catch, catch)
+  , (B.Catch, catch)
   , (B.Throw, throw)
   -- , (B.Goto, goto)
   , (B.Label, label)
@@ -28,7 +28,7 @@ controlBuiltins = [
   -- , (B.NestWhileList, nestWhileList)
   -- , (B.FixedPoint, fixedPoint)
   -- , (B.FixedPointList, fixedPointList)
-  -- , (B.Abort, abort)
+  , (B.Abort, abort)
   , (B.Break, break_)
   , (B.Continue, continue)
   ]
@@ -44,6 +44,19 @@ downcodeCompoundExpression e@(Cmp _ []) = return e
 downcodeCompoundExpression (Cmp _ args) = do
   args_ev <- V.mapM evaluate args
   return $ V.last args_ev
+
+catch :: BuiltinDefinition
+catch = defaultBuiltin {
+    attributes = [HoldFirst, Protected]
+  , downcode = downcodeCatch
+  }
+
+downcodeCatch :: Expression -> Kernel Expression
+downcodeCatch (Cmp _ [instr]) = evaluate instr `catchError` handlerCatch
+  where handlerCatch :: Exception -> Kernel Expression
+        handlerCatch (ThrowException e) = return e
+        handlerCatch exc                = throwError exc
+downcodeCatch _ = error "unreachable"
 
 throw :: BuiltinDefinition
 throw = defaultBuiltin {
@@ -98,13 +111,13 @@ codeFor start test incr body = evaluate start >> doLoop
                        CmpB B.Return [a, SymbolB B.For] -> return a
                        e@(CmpB B.Return [_, _]) -> return e
                        _ -> evaluate incr >> doLoop)
-                 `catchError` handler (evaluate incr >> doLoop)
+                 `catchError` handlerLoop (evaluate incr >> doLoop)
             else return $ toExpression ()
 
-handler :: Kernel Expression -> Exception -> Kernel Expression
-handler _ BreakException = return $ toExpression ()
-handler next ContinueException = next
-handler _ e = throwError e
+handlerLoop :: Kernel Expression -> Exception -> Kernel Expression
+handlerLoop _ BreakException = return $ toExpression ()
+handlerLoop next ContinueException = next
+handlerLoop _ e = throwError e
         
             
 while :: BuiltinDefinition
@@ -128,7 +141,7 @@ codeWhile test body = do
                CmpB B.Return [x, SymbolB B.While] -> return x
                e@(CmpB B.Return [_, _]) -> return e
                _ -> codeWhile test body)
-         `catchError` handler (codeWhile test body)
+         `catchError` handlerLoop (codeWhile test body)
     else return $ toExpression ()
 
 nest :: BuiltinDefinition
@@ -151,6 +164,14 @@ downcodeNestList (Cmp _ [f, x, Number n]) | n >= 0
   = return $ toExpression $ take (fromIntegral n)
                                  (iterate (Cmp f . V.singleton) x)
 downcodeNestList e = return e
+
+abort :: BuiltinDefinition
+abort = defaultBuiltin {
+  downcode = downcodeAbort -- TODO: 0 arg
+  }
+
+downcodeAbort :: Expression -> Kernel Expression
+downcodeAbort _ = throwError AbortException
 
 break_ :: BuiltinDefinition
 break_ = defaultBuiltin {

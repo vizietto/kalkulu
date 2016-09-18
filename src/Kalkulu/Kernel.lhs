@@ -208,9 +208,10 @@ pack :: [LogExpression] -> [LogExpression]
 pack s = [LogSequence s]
 
 data Exception =
-    ThrowException Expression
+    AbortException
   | BreakException
   | ContinueException
+  | ThrowException Expression
 
 type KernelT m = ExceptT Exception (WriterT [LogExpression] (FreeT Action m))
         
