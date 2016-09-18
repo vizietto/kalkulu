@@ -149,6 +149,7 @@ data BuiltinSymbol =
   | Throw
   | Times
   | TimesBy
+  | Trace
   | True
   | TrueQ
   | Tuples

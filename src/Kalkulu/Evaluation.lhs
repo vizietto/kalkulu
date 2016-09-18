@@ -16,6 +16,7 @@ import qualified Data.Vector as V
 import Data.List (sort)
 import Data.Maybe (isJust, fromJust)
 import Control.Monad
+import Control.Monad.Writer
 import Kalkulu.VectorPattern
 
 import qualified Kalkulu.BuiltinSymbol as B
@@ -279,12 +280,13 @@ evaluate e = do
 -- TODO: send Message if IterationLimit or RecursionLimit
 -- TODO: trace evaluation
 evaluate :: Expression -> Kernel Expression
-evaluate e = do
+evaluate e = censor regroup $ do
   limit <- getIterationLimit
   repeatEval limit e
   where repeatEval :: Maybe Int -> Expression -> Kernel Expression
         repeatEval (Just 0) expr = return $ CmpB B.Hold [expr]
         repeatEval n expr = do
+          tell [LogItem expr]
           e' <- eval expr
           if expr == e' then return expr
                      else repeatEval (n >>= return . (+ 1)) e'

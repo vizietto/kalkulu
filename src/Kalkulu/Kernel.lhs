@@ -13,6 +13,7 @@ module Kalkulu.Kernel where
 
 import Data.List (intercalate)
 import Data.List.Split (splitWhen)
+import qualified Data.Vector as V
 import Control.Monad.Identity
 import Control.Monad.Morph
 import Control.Monad.Trans.Except
@@ -204,8 +205,14 @@ getSubcode s = getBuiltinCode s >>= return . subcode
 data LogExpression = LogItem     Expression
                    | LogSequence [LogExpression]
 
-pack :: [LogExpression] -> [LogExpression]
-pack s = [LogSequence s]
+instance ToExpression LogExpression where
+  toExpression (LogItem e) = CmpB B.HoldForm (V.singleton e)
+  toExpression (LogSequence s) = toExpression s
+
+regroup :: [LogExpression] -> [LogExpression]
+regroup []  = []
+regroup [s] = []
+regroup s = [LogSequence s]
 
 data Exception =
     AbortException

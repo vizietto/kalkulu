@@ -2,7 +2,7 @@
 
 module Kalkulu.Builtin.Evaluation (evaluationBuiltins) where
 
-import Control.Monad
+import Control.Monad.Writer
 
 import qualified Data.Vector as V
 import Kalkulu.Builtin
@@ -17,7 +17,7 @@ evaluationBuiltins = [
   , (B.Evaluate, evaluate_)
   , (B.Unevaluated, unevaluated)
   , (B.ReleaseHold, releaseHold)
-  , (B.Sequence, sequence__)
+  , (B.Trace, trace_)
   ]
 
 hold :: BuiltinDefinition
@@ -63,5 +63,13 @@ pureReleaseHold (Cmp _ [CmpB h args])
 pureReleaseHold (Cmp _ [e]) = e
 pureReleaseHold _ = error "unreachable"
 
-sequence__ :: BuiltinDefinition
-sequence__ = defaultBuiltin
+trace_:: BuiltinDefinition
+trace_ = defaultBuiltin {
+    attributes = [HoldAll, Protected]
+  , downcode   = downcodeTrace -- TODO: 1 arg
+  }
+
+downcodeTrace :: Expression -> Kernel Expression
+downcodeTrace (Cmp _ [e]) = do
+  (e', tr) <- listen (evaluate e)
+  return $ toExpression tr
