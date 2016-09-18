@@ -2,11 +2,10 @@
 
 module Kalkulu.Builtin.Control (controlBuiltins) where
 
-import Control.Monad
-
+import Control.Monad.Except
 import qualified Data.Vector as V
+
 import Kalkulu.Builtin
-import qualified Kalkulu.Pattern as Pattern
 import qualified Kalkulu.BuiltinSymbol as B
 
 controlBuiltins :: [(B.BuiltinSymbol, BuiltinDefinition)]
@@ -14,7 +13,7 @@ controlBuiltins = [
     (B.CompoundExpression, compoundExpression)
   -- , (B.Return, return_)
   -- , (B.Catch, catch)
-  -- , (B.Throw, throw)
+  , (B.Throw, throw)
   -- , (B.Goto, goto)
   , (B.Label, label)
   , (B.If, if_)
@@ -30,8 +29,8 @@ controlBuiltins = [
   -- , (B.FixedPoint, fixedPoint)
   -- , (B.FixedPointList, fixedPointList)
   -- , (B.Abort, abort)
-  -- , (B.Break, break)
-  -- , (B.Continue, continue)
+  , (B.Break, break_)
+  , (B.Continue, continue)
   ]
 
 compoundExpression :: BuiltinDefinition
@@ -45,6 +44,16 @@ downcodeCompoundExpression e@(Cmp _ []) = return e
 downcodeCompoundExpression (Cmp _ args) = do
   args_ev <- V.mapM evaluate args
   return $ V.last args_ev
+
+throw :: BuiltinDefinition
+throw = defaultBuiltin {
+  downcode = downcodeThrow -- TODO: 1 (or 2 args)
+  }
+
+downcodeThrow :: Expression -> Kernel Expression
+downcodeThrow (Cmp _ [e]) = throwError (ThrowException e)
+downcodeThrow e = return e
+  
 
 if_ :: BuiltinDefinition
 if_ = defaultBuiltin {
@@ -83,13 +92,20 @@ codeFor start test incr body = evaluate start >> doLoop
   where doLoop = do
           test' <- evaluate test
           if test' == toExpression True
-            then do b <- evaluate body
-                    case b of
-                      CmpB B.Return [a] -> return a
-                      CmpB B.Return [a, SymbolB B.For] -> return a
-                      e@(CmpB B.Return [_, _]) -> return e
-                      _ -> evaluate incr >> doLoop
+            then (do b <- evaluate body
+                     case b of
+                       CmpB B.Return [a] -> return a
+                       CmpB B.Return [a, SymbolB B.For] -> return a
+                       e@(CmpB B.Return [_, _]) -> return e
+                       _ -> evaluate incr >> doLoop)
+                 `catchError` handler (evaluate incr >> doLoop)
             else return $ toExpression ()
+
+handler :: Kernel Expression -> Exception -> Kernel Expression
+handler _ BreakException = return $ toExpression ()
+handler next ContinueException = next
+handler _ e = throwError e
+        
             
 while :: BuiltinDefinition
 while = defaultBuiltin {
@@ -106,12 +122,13 @@ codeWhile :: Expression -> Expression -> Kernel Expression
 codeWhile test body = do
   test' <- evaluate test
   if test' == toExpression True
-    then do b <- evaluate body
-            case b of
-              CmpB B.Return [x] -> return x
-              CmpB B.Return [x, SymbolB B.While] -> return x
-              e@(CmpB B.Return [_, _]) -> return e
-              _ -> codeWhile test body
+    then (do b <- evaluate body
+             case b of
+               CmpB B.Return [x] -> return x
+               CmpB B.Return [x, SymbolB B.While] -> return x
+               e@(CmpB B.Return [_, _]) -> return e
+               _ -> codeWhile test body)
+         `catchError` handler (codeWhile test body)
     else return $ toExpression ()
 
 nest :: BuiltinDefinition
@@ -134,3 +151,19 @@ downcodeNestList (Cmp _ [f, x, Number n]) | n >= 0
   = return $ toExpression $ take (fromIntegral n)
                                  (iterate (Cmp f . V.singleton) x)
 downcodeNestList e = return e
+
+break_ :: BuiltinDefinition
+break_ = defaultBuiltin {
+  downcode = downcodeBreak -- 0 args expected
+  }
+
+downcodeBreak :: Expression -> Kernel Expression
+downcodeBreak _ = throwError BreakException
+
+continue :: BuiltinDefinition
+continue = defaultBuiltin {
+  downcode = downcodeContinue -- 0 args expected
+  }
+
+downcodeContinue :: Expression -> Kernel Expression
+downcodeContinue _ = throwError ContinueException
